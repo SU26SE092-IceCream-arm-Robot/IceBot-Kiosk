@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:icebot_kiosk/core/error/api_exception.dart';
+import 'package:icebot_kiosk/core/network/api_result.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
 /// A custom Dio client wrapper to manage API configurations and request life cycle.
@@ -11,9 +13,10 @@ class DioClient {
     List<Interceptor>? interceptors,
   }) : _dio = dio ?? Dio() {
     _dio
-      ..options.baseUrl = baseUrl
+      ..options.baseUrl = _normalizeBaseUrl(baseUrl)
       ..options.connectTimeout = const Duration(seconds: 15)
       ..options.receiveTimeout = const Duration(seconds: 15)
+      ..options.sendTimeout = const Duration(seconds: 15)
       ..options.headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -38,6 +41,42 @@ class DioClient {
   }
 
   Dio get dio => _dio;
+
+  Future<ApiResult<T>> getResult<T>(
+    String path, {
+    required JsonDecoder<T> fromJson,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await get(
+      path,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+
+    return _readResult(response, fromJson);
+  }
+
+  Future<ApiResult<T>> postResult<T>(
+    String path, {
+    required JsonDecoder<T> fromJson,
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await post(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    );
+
+    return _readResult(response, fromJson);
+  }
 
   // GET request
   Future<Response> get(
@@ -136,6 +175,50 @@ class DioClient {
   }
 
   Exception _handleDioError(DioException dioException) {
-    return dioException;
+    return ApiException.fromDio(dioException);
+  }
+
+  ApiResult<T> _readResult<T>(
+    Response<dynamic> response,
+    JsonDecoder<T> fromJson,
+  ) {
+    final data = response.data;
+    if (data is! Map) {
+      throw const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Định dạng phản hồi máy chủ không hợp lệ.',
+      );
+    }
+
+    final result = ApiResult<T>.fromJson(
+      Map<String, dynamic>.from(data),
+      fromJson,
+    );
+
+    if (!result.succeeded) {
+      throw ApiException.fromApiResult(
+        ApiResult<Object?>(
+          succeeded: result.succeeded,
+          statusCode: result.statusCode,
+          message: result.message,
+          data: result.data,
+          details: result.details,
+          validationErrors: result.validationErrors,
+          businessError: result.businessError,
+          systemError: result.systemError,
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  static String _normalizeBaseUrl(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+
+    return trimmed.replaceFirst(RegExp(r'/+$'), '');
   }
 }

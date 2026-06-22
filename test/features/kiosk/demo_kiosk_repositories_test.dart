@@ -1,0 +1,60 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:icebot_kiosk/config/app_config.dart';
+import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
+import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
+import 'package:icebot_kiosk/features/kiosk/data/repositories/demo_kiosk_repositories.dart';
+
+void main() {
+  test(
+    'demo repositories provide menu, order, payment, and tracking flow',
+    () async {
+      var now = DateTime.utc(2026, 6, 18, 10);
+      final store = DemoKioskStore(clock: () => now);
+      final menuRepository = DemoMenuRepository(store);
+      final orderRepository = DemoOrderRepository(store);
+      final paymentRepository = DemoPaymentRepository(store);
+
+      final menu = await menuRepository.getRuntimeMenu(AppConfig.demoKioskId);
+      expect(menu.items, hasLength(4));
+      expect(menu.containsMachineRuntimeState, isFalse);
+
+      final item = menu.items.first;
+      final order = await orderRepository.createOrder(
+        CreateOrderRequest(
+          kioskId: AppConfig.demoKioskId,
+          runtimeSnapshotId: menu.snapshotId,
+          runtimeSnapshotGeneratedAt: menu.generatedAt,
+          clientTotalAmount: item.finalPrice,
+          items: [
+            CreateOrderItemRequest(menuItemId: item.menuItemId, quantity: 1),
+          ],
+        ),
+      );
+      expect(order.status, OrderStatus.pendingPayment);
+      expect(order.totalAmount, item.finalPrice);
+
+      final session = await paymentRepository.createPaymentSession(order.id);
+      expect(session.qrCodePayload, contains('DEMO-QR'));
+      expect(session.checkoutUrl, isNull);
+
+      var paymentStatus = await orderRepository.getPaymentStatus(order.id);
+      expect(
+        paymentStatus.paymentTransactionStatus,
+        PaymentTransactionStatus.pending,
+      );
+
+      now = now.add(const Duration(seconds: 4));
+      paymentStatus = await orderRepository.getPaymentStatus(order.id);
+      expect(
+        paymentStatus.paymentTransactionStatus,
+        PaymentTransactionStatus.paid,
+      );
+      expect(paymentStatus.orderPaymentStatus, PaymentStatus.paid);
+
+      now = now.add(const Duration(seconds: 10));
+      final completedOrder = await orderRepository.getOrder(order.id);
+      expect(completedOrder.status, OrderStatus.completed);
+      expect(completedOrder.paymentStatus, PaymentStatus.paid);
+    },
+  );
+}
