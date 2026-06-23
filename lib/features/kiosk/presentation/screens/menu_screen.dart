@@ -7,6 +7,7 @@ import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_panel.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -55,7 +56,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('IceBot'),
+        title: const Text('IceBot Kiosk'),
         actions: [
           IconButton(
             tooltip: 'Tải lại menu',
@@ -80,15 +81,15 @@ class _MenuScreenState extends State<MenuScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _MenuHeader(itemCount: items.length),
-                        SizedBox(height: isWide ? 28 : 20),
+                        SizedBox(height: isWide ? 30 : 22),
                         Expanded(
                           child: GridView.builder(
                             gridDelegate:
                                 SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: isWide ? 390 : 340,
-                                  mainAxisSpacing: 22,
-                                  crossAxisSpacing: 22,
-                                  childAspectRatio: isWide ? 0.78 : 0.72,
+                                  maxCrossAxisExtent: isWide ? 410 : 350,
+                                  mainAxisSpacing: 24,
+                                  crossAxisSpacing: 24,
+                                  childAspectRatio: isWide ? 0.76 : 0.7,
                                 ),
                             itemCount: items.length,
                             itemBuilder: (context, index) {
@@ -115,9 +116,14 @@ class _MenuHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Row(
+    return Wrap(
+      spacing: 20,
+      runSpacing: 16,
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -127,25 +133,30 @@ class _MenuHeader extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Chọn món kem bạn muốn mua. Menu hiển thị theo cấu hình bán hàng của kiosk.',
+                'Chọn món kem bạn muốn mua. Giá và món bán theo menu đang hoạt động của kiosk.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            AppConfig.demoMode ? 'Demo - $itemCount món' : '$itemCount món',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.w800,
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            if (AppConfig.demoMode)
+              const KioskInfoPill(
+                icon: Icons.visibility_outlined,
+                label: 'Chế độ demo',
+                backgroundColor: Color(0xFFFFF7ED),
+                foregroundColor: Color(0xFF92400E),
+              ),
+            KioskInfoPill(
+              icon: Icons.icecream_outlined,
+              label: '$itemCount món',
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
             ),
-          ),
+          ],
         ),
       ],
     );
@@ -158,22 +169,10 @@ class _MenuLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 56,
-              height: 56,
-              child: CircularProgressIndicator(strokeWidth: 5),
-            ),
-            SizedBox(height: 24),
-            Text(
-              'Đang tải menu kiosk...',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
+      body: KioskLoadingPanel(
+        title: 'IceBot Kiosk',
+        message: 'Đang tải menu hôm nay cho bạn.',
+        icon: Icons.restaurant_menu_outlined,
       ),
     );
   }
@@ -184,32 +183,11 @@ class _EmptyMenuView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.icecream_outlined,
-              size: 88,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Chưa có món sẵn sàng bán',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.displayMedium,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Vui lòng quay lại sau hoặc liên hệ nhân viên hỗ trợ.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ],
-        ),
-      ),
+    return const KioskEmptyState(
+      title: 'Chưa có món sẵn sàng bán',
+      message:
+          'Menu kiosk hiện chưa có sản phẩm khả dụng. Vui lòng quay lại sau hoặc liên hệ nhân viên hỗ trợ.',
+      icon: Icons.icecream_outlined,
     );
   }
 }
@@ -231,30 +209,47 @@ class _MenuItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: item.imageUrl == null || item.imageUrl!.isEmpty
-                  ? Container(
-                      color: colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.icecream_outlined,
-                        size: 76,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    )
-                  : CachedNetworkImage(
-                      imageUrl: item.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => Container(
-                        color: colorScheme.primaryContainer,
-                        child: Icon(
-                          Icons.icecream_outlined,
-                          size: 76,
-                          color: colorScheme.onPrimaryContainer,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  item.imageUrl == null || item.imageUrl!.isEmpty
+                      ? Container(
+                          color: colorScheme.primaryContainer,
+                          child: Icon(
+                            Icons.icecream_outlined,
+                            size: 86,
+                            color: colorScheme.onPrimaryContainer,
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: item.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (context, url, error) => Container(
+                            color: colorScheme.primaryContainer,
+                            child: Icon(
+                              Icons.icecream_outlined,
+                              size: 86,
+                              color: colorScheme.onPrimaryContainer,
+                            ),
+                          ),
                         ),
+                  Positioned(
+                    left: 16,
+                    bottom: 16,
+                    child: KioskInfoPill(
+                      label: KioskFormatters.money(
+                        item.finalPrice,
+                        currency: item.currency,
                       ),
+                      backgroundColor: Colors.white,
+                      foregroundColor: colorScheme.primary,
                     ),
+                  ),
+                ],
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -274,22 +269,11 @@ class _MenuItemCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    KioskFormatters.money(
-                      item.finalPrice,
-                      currency: item.currency,
-                    ),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    KioskFormatters.durationSeconds(
+                  KioskInfoPill(
+                    icon: Icons.timer_outlined,
+                    label: KioskFormatters.durationSeconds(
                       item.preparationTimeSeconds,
                     ),
-                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -318,13 +302,16 @@ class _CartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Badge.count(
-      count: count,
-      isLabelVisible: count > 0,
-      child: IconButton(
-        tooltip: 'Giỏ hàng',
-        onPressed: () => context.go(AppRouter.cart),
-        icon: const Icon(Icons.shopping_cart_outlined),
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Badge.count(
+        count: count,
+        isLabelVisible: count > 0,
+        child: FilledButton.icon(
+          onPressed: () => context.go(AppRouter.cart),
+          icon: const Icon(Icons.shopping_cart_outlined),
+          label: const Text('Giỏ hàng'),
+        ),
       ),
     );
   }

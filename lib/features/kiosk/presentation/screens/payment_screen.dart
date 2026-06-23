@@ -10,6 +10,7 @@ import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/status/kiosk_status_presenter.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -101,27 +102,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (order == null || session == null || order.id != widget.orderId) {
       return Scaffold(
         appBar: AppBar(title: const Text('Thanh toán QR')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.qr_code_2_outlined, size: 88),
-                const SizedBox(height: 24),
-                Text(
-                  'Chưa có phiên thanh toán',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayMedium,
-                ),
-                const SizedBox(height: 28),
-                FilledButton(
-                  onPressed: () => context.go(AppRouter.menu),
-                  child: const Text('Về menu'),
-                ),
-              ],
-            ),
-          ),
+        body: KioskEmptyState(
+          title: 'Chưa có phiên thanh toán',
+          message: 'Vui lòng tạo đơn hàng từ giỏ hàng trước khi thanh toán.',
+          icon: Icons.qr_code_2_outlined,
+          actionLabel: 'Về menu',
+          onAction: () => context.go(AppRouter.menu),
         ),
       );
     }
@@ -139,7 +125,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Thanh toán QR'),
+        title: const Text('Quét mã để thanh toán'),
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
@@ -213,61 +199,65 @@ class _PaymentSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(statusView.icon, color: statusView.color, size: 84),
-            const SizedBox(height: 18),
-            Text(
-              statusView.title,
-              style: Theme.of(
-                context,
-              ).textTheme.displayMedium?.copyWith(color: statusView.color),
+    return KioskSectionCard(
+      padding: const EdgeInsets.all(30),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(statusView.icon, color: statusView.color, size: 84),
+          const SizedBox(height: 18),
+          Text(
+            statusView.title,
+            style: Theme.of(
+              context,
+            ).textTheme.displayMedium?.copyWith(color: statusView.color),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            statusView.message,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 24),
+          _InfoRow(label: 'Mã đơn', value: order.orderNumber),
+          _InfoRow(
+            label: 'Số tiền',
+            value: KioskFormatters.money(
+              session.amount,
+              currency: session.currency,
             ),
+          ),
+          _InfoRow(
+            label: 'Nhà cung cấp',
+            value: session.provider.isEmpty
+                ? 'Đang cập nhật'
+                : session.provider,
+          ),
+          _InfoRow(
+            label: 'Hết hạn',
+            value: KioskFormatters.shortDateTime(session.expiresAt),
+          ),
+          if (isPolling) ...[
             const SizedBox(height: 12),
-            Text(
-              statusView.message,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 24),
-            _InfoRow(label: 'Mã đơn', value: order.orderNumber),
-            _InfoRow(
-              label: 'Số tiền',
-              value: KioskFormatters.money(
-                session.amount,
-                currency: session.currency,
-              ),
-            ),
-            _InfoRow(
-              label: 'Hết hạn',
-              value: KioskFormatters.shortDateTime(session.expiresAt),
-            ),
-            if (isPolling) ...[
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(minHeight: 6),
-            ],
-            if (errorMessage != null) ...[
-              const SizedBox(height: 16),
-              _InlineWarning(message: errorMessage!),
-            ],
-            const SizedBox(height: 28),
-            if (canCancel)
-              OutlinedButton.icon(
-                onPressed: isCancelling ? null : onCancel,
-                icon: const Icon(Icons.cancel_outlined),
-                label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn'),
-              )
-            else
-              OutlinedButton.icon(
-                onPressed: () => context.go(AppRouter.menu),
-                icon: const Icon(Icons.home_outlined),
-                label: const Text('Tạo đơn mới'),
-              ),
+            const LinearProgressIndicator(minHeight: 6),
           ],
-        ),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 16),
+            _InlineWarning(message: errorMessage!),
+          ],
+          const SizedBox(height: 28),
+          if (canCancel)
+            OutlinedButton.icon(
+              onPressed: isCancelling ? null : onCancel,
+              icon: const Icon(Icons.cancel_outlined),
+              label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: () => context.go(AppRouter.menu),
+              icon: const Icon(Icons.home_outlined),
+              label: const Text('Tạo đơn mới'),
+            ),
+        ],
       ),
     );
   }
@@ -307,99 +297,108 @@ class _QrPayloadPanel extends StatelessWidget {
     final payload = session.qrCodePayload?.trim();
     final checkoutUrl = session.checkoutUrl?.trim();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Mã thanh toán',
-              style: Theme.of(context).textTheme.displayMedium,
+    return KioskSectionCard(
+      padding: const EdgeInsets.all(30),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Mã thanh toán',
+            style: Theme.of(context).textTheme.displayMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã. Nếu backend chỉ trả về nội dung thanh toán, nội dung sẽ hiển thị bên dưới.',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 20),
+          Container(
+            constraints: const BoxConstraints(minHeight: 300),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Quét mã hoặc dùng nút mở trang thanh toán nếu nhà cung cấp trả về đường dẫn.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 20),
-            Container(
-              constraints: const BoxConstraints(minHeight: 300),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: payload == null || payload.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Chưa có mã QR. Vui lòng mở trang thanh toán nếu có.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineMedium,
+            child: payload == null || payload.isEmpty
+                ? Center(
+                    child: Text(
+                      'Chưa có nội dung QR. Vui lòng mở trang thanh toán nếu có.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Icon(
+                        Icons.qr_code_2_outlined,
+                        size: 96,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                       ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Icon(
-                          Icons.qr_code_2_outlined,
-                          size: 96,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
-                        ),
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          height: 150,
-                          child: SingleChildScrollView(
-                            child: SelectableText(
-                              payload,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimaryContainer,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Nội dung thanh toán',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
                             ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 150,
+                        child: SingleChildScrollView(
+                          child: SelectableText(
+                            payload,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
                         ),
-                      ],
-                    ),
-            ),
-            if (AppConfig.demoMode) ...[
-              const SizedBox(height: 14),
-              _DemoQrNotice(),
-            ],
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: payload == null || payload.isEmpty
-                  ? null
-                  : () async {
-                      await Clipboard.setData(ClipboardData(text: payload));
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Đã sao chép mã QR')),
-                        );
-                      }
-                    },
-              icon: const Icon(Icons.copy),
-              label: const Text('Sao chép mã QR'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: checkoutUrl == null || checkoutUrl.isEmpty
-                  ? null
-                  : () => launchUrl(
-                      Uri.parse(checkoutUrl),
-                      mode: LaunchMode.externalApplication,
-                    ),
-              icon: const Icon(Icons.open_in_new),
-              label: const Text('Mở trang thanh toán'),
-            ),
+                      ),
+                    ],
+                  ),
+          ),
+          if (AppConfig.demoMode) ...[
+            const SizedBox(height: 14),
+            _DemoQrNotice(),
           ],
-        ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: payload == null || payload.isEmpty
+                ? null
+                : () async {
+                    await Clipboard.setData(ClipboardData(text: payload));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Đã sao chép nội dung thanh toán'),
+                        ),
+                      );
+                    }
+                  },
+            icon: const Icon(Icons.copy),
+            label: const Text('Sao chép nội dung thanh toán'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: checkoutUrl == null || checkoutUrl.isEmpty
+                ? null
+                : () => launchUrl(
+                    Uri.parse(checkoutUrl),
+                    mode: LaunchMode.externalApplication,
+                  ),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Mở trang thanh toán'),
+          ),
+        ],
       ),
     );
   }

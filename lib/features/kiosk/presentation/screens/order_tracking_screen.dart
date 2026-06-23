@@ -8,6 +8,7 @@ import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart'
 import 'package:icebot_kiosk/features/kiosk/presentation/status/kiosk_status_presenter.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_panel.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   const OrderTrackingScreen({required this.orderId, super.key});
@@ -95,22 +96,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     if (order == null) {
       return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 56,
-                height: 56,
-                child: CircularProgressIndicator(strokeWidth: 5),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Đang cập nhật trạng thái đơn hàng...',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
+        body: KioskLoadingPanel(
+          title: 'Đang cập nhật đơn hàng',
+          message:
+              'IceBot đang kiểm tra trạng thái thanh toán và chuẩn bị món.',
+          icon: Icons.receipt_long_outlined,
         ),
       );
     }
@@ -203,50 +193,45 @@ class _OrderStatusPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(statusView.icon, color: statusView.color, size: 112),
-            const SizedBox(height: 24),
-            Text(
-              statusView.title,
-              style: Theme.of(
-                context,
-              ).textTheme.displayLarge?.copyWith(color: statusView.color),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              statusView.message,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            if (isPolling) ...[
-              const SizedBox(height: 28),
-              const LinearProgressIndicator(minHeight: 6),
-            ],
-            if (errorMessage != null) ...[
-              const SizedBox(height: 16),
-              _InlineWarning(message: errorMessage!),
-            ],
+    return KioskSectionCard(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(statusView.icon, color: statusView.color, size: 112),
+          const SizedBox(height: 24),
+          Text(
+            statusView.title,
+            style: Theme.of(
+              context,
+            ).textTheme.displayLarge?.copyWith(color: statusView.color),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            statusView.message,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          if (isPolling) ...[
             const SizedBox(height: 28),
-            _OrderStepIndicator(order: order),
-            const SizedBox(height: 28),
-            Text(
-              'Mã đơn: ${order.orderNumber}',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              KioskFormatters.money(
-                order.totalAmount,
-                currency: order.currency,
-              ),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            const LinearProgressIndicator(minHeight: 6),
           ],
-        ),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 16),
+            _InlineWarning(message: errorMessage!),
+          ],
+          const SizedBox(height: 28),
+          _OrderStepIndicator(order: order),
+          const SizedBox(height: 28),
+          Text(
+            'Mã đơn: ${order.orderNumber}',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            KioskFormatters.money(order.totalAmount, currency: order.currency),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ],
       ),
     );
   }
@@ -291,38 +276,39 @@ class _OrderActionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Chi tiết', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 16),
-            _DetailLine(label: 'Trạng thái', value: order.customerStatus),
-            _DetailLine(
-              label: 'Thanh toán',
-              value: _paymentLabel(order.paymentStatus),
+    return KioskSectionCard(
+      padding: const EdgeInsets.all(26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Thông tin đơn hàng',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 16),
+          _DetailLine(label: 'Trạng thái', value: _orderLabel(order.status)),
+          _DetailLine(
+            label: 'Thanh toán',
+            value: _paymentLabel(order.paymentStatus),
+          ),
+          _DetailLine(
+            label: 'Đặt lúc',
+            value: KioskFormatters.shortDateTime(order.placedAt),
+          ),
+          const SizedBox(height: 28),
+          if (canCancel)
+            OutlinedButton.icon(
+              onPressed: isCancelling ? null : onCancel,
+              icon: const Icon(Icons.cancel_outlined),
+              label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
+            )
+          else
+            FilledButton.icon(
+              onPressed: () => context.go(AppRouter.menu),
+              icon: const Icon(Icons.home_outlined),
+              label: const Text('Tạo đơn mới'),
             ),
-            _DetailLine(
-              label: 'Đặt lúc',
-              value: KioskFormatters.shortDateTime(order.placedAt),
-            ),
-            const SizedBox(height: 28),
-            if (canCancel)
-              OutlinedButton.icon(
-                onPressed: isCancelling ? null : onCancel,
-                icon: const Icon(Icons.cancel_outlined),
-                label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn'),
-              )
-            else
-              FilledButton.icon(
-                onPressed: () => context.go(AppRouter.menu),
-                icon: const Icon(Icons.home_outlined),
-                label: const Text('Về menu'),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -339,6 +325,25 @@ class _OrderActionPanel extends StatelessWidget {
       PaymentStatus.unknown => 'Chưa xác định',
     };
   }
+
+  String _orderLabel(OrderStatus status) {
+    return switch (status) {
+      OrderStatus.draft => 'Đang nhập đơn',
+      OrderStatus.pendingPayment => 'Đang chờ thanh toán',
+      OrderStatus.paid => 'Đã thanh toán',
+      OrderStatus.readyForExecution || OrderStatus.accepted => 'Đã nhận đơn',
+      OrderStatus.preparing => 'Robot đang chuẩn bị',
+      OrderStatus.ready => 'Món đã sẵn sàng',
+      OrderStatus.completed => 'Hoàn tất',
+      OrderStatus.cancelled => 'Đã hủy',
+      OrderStatus.failed => 'Đơn hàng gặp lỗi',
+      OrderStatus.executionRejected => 'Không thể chuẩn bị món',
+      OrderStatus.refundRequired => 'Cần hỗ trợ hoàn tiền',
+      OrderStatus.refunded => 'Đã hoàn tiền',
+      OrderStatus.compensated => 'Đã hỗ trợ bù',
+      OrderStatus.unknown => 'Chưa xác định',
+    };
+  }
 }
 
 class _OrderStepIndicator extends StatelessWidget {
@@ -351,10 +356,9 @@ class _OrderStepIndicator extends StatelessWidget {
     final currentStep = _stepFor(order);
     final isFailed = _isProblemState(order);
     final labels = const [
-      'Chờ thanh toán',
+      'Đã tạo đơn',
       'Đã thanh toán',
       'Đang chuẩn bị',
-      'Nhận kem',
       'Hoàn tất',
     ];
 
@@ -382,10 +386,10 @@ class _OrderStepIndicator extends StatelessWidget {
       OrderStatus.readyForExecution ||
       OrderStatus.accepted ||
       OrderStatus.preparing => 2,
-      OrderStatus.ready => 3,
+      OrderStatus.ready => 2,
       OrderStatus.completed ||
       OrderStatus.refunded ||
-      OrderStatus.compensated => 4,
+      OrderStatus.compensated => 3,
       OrderStatus.cancelled ||
       OrderStatus.failed ||
       OrderStatus.executionRejected ||

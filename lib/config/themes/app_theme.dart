@@ -31,6 +31,11 @@ class AppTheme {
         error: errorColor,
       ),
       scaffoldBackgroundColor: backgroundColor,
+      dividerTheme: const DividerThemeData(
+        color: Color(0xFFE2E8F0),
+        thickness: 1,
+        space: 28,
+      ),
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           fontSize: 44,
@@ -49,7 +54,7 @@ class AppTheme {
         ),
         titleLarge: TextStyle(
           fontSize: 22,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: textSecondaryColor,
         ),
         bodyLarge: TextStyle(fontSize: 18, color: textPrimaryColor),
@@ -59,21 +64,22 @@ class AppTheme {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        centerTitle: true,
-        toolbarHeight: 72,
-        titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+        centerTitle: false,
+        toolbarHeight: 78,
+        titleSpacing: 24,
+        titleTextStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(192, 64),
-          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          minimumSize: const Size(204, 66),
+          textStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(192, 64),
-          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          minimumSize: const Size(204, 66),
+          textStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
@@ -87,9 +93,19 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: surfaceColor,
         elevation: 0,
+        margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: textPrimaryColor,
+        contentTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

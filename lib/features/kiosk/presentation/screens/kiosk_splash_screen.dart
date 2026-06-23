@@ -5,6 +5,7 @@ import 'package:icebot_kiosk/config/routes/app_router.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_panel.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
 class KioskSplashScreen extends StatefulWidget {
   const KioskSplashScreen({super.key});
@@ -56,61 +57,11 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
       });
     }
 
-    return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 820),
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 48,
-                  vertical: 44,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.icecream_outlined,
-                        size: 76,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Text(
-                      'IceBot Kiosk',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.displayLarge,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Đang tải menu cho kiosk. Vui lòng chờ trong giây lát.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: 280,
-                      child: LinearProgressIndicator(
-                        minHeight: 8,
-                        borderRadius: BorderRadius.circular(8),
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+    return const Scaffold(
+      body: KioskLoadingPanel(
+        title: 'IceBot Kiosk',
+        message:
+            'Đang tải menu hôm nay cho kiosk. Vui lòng chờ trong giây lát.',
       ),
     );
   }
@@ -129,55 +80,21 @@ class _MissingKioskConfigView extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 820),
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(40),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 112,
-                      height: 112,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.settings_outlined,
-                        color: colorScheme.onPrimaryContainer,
-                        size: 64,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Chưa cấu hình kiosk',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.displayMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Vui lòng khởi chạy app với mã kiosk hợp lệ để tablet '
-                      'biết đang phục vụ kiosk nào.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Biến cấu hình cần có: ICEBOT_KIOSK_ID',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      body: KioskEmptyState(
+        title: 'Chưa cấu hình kiosk',
+        message:
+            'Tablet cần mã kiosk hợp lệ để tải đúng menu và nhận đơn hàng.',
+        icon: Icons.settings_outlined,
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
+          child: Text(
+            'Biến cấu hình cần có: ICEBOT_KIOSK_ID',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),

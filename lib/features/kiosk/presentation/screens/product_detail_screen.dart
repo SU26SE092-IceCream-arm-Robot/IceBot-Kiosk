@@ -5,6 +5,7 @@ import 'package:icebot_kiosk/config/routes/app_router.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   const ProductDetailScreen({required this.menuItemId, super.key});
@@ -26,27 +27,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (item == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Chi tiết món')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.search_off_outlined, size: 88),
-                const SizedBox(height: 24),
-                Text(
-                  'Món này không còn trong menu',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayMedium,
-                ),
-                const SizedBox(height: 28),
-                FilledButton(
-                  onPressed: () => context.go(AppRouter.menu),
-                  child: const Text('Về menu'),
-                ),
-              ],
-            ),
-          ),
+        body: KioskEmptyState(
+          title: 'Món này không còn trong menu',
+          message:
+              'Menu có thể vừa được cập nhật. Vui lòng quay lại menu để chọn món khác.',
+          icon: Icons.search_off_outlined,
+          actionLabel: 'Về menu',
+          onAction: () => context.go(AppRouter.menu),
         ),
       );
     }
@@ -166,9 +153,9 @@ class _ProductInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(30),
+    return KioskSectionCard(
+      padding: const EdgeInsets.all(30),
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -211,7 +198,23 @@ class _ProductInfo extends StatelessWidget {
             const SizedBox(height: 20),
             _CustomizationNotice(),
             const SizedBox(height: 28),
-            Text('Số lượng', style: Theme.of(context).textTheme.headlineMedium),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Số lượng',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                ),
+                Text(
+                  'Tạm tính: ${KioskFormatters.money(item.finalPrice * quantity, currency: item.currency)}',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -220,11 +223,17 @@ class _ProductInfo extends StatelessWidget {
                   onPressed: onDecrease,
                   icon: const Icon(Icons.remove),
                 ),
-                SizedBox(
-                  width: 112,
+                Container(
+                  width: 124,
+                  height: 64,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Text(
                     '$quantity',
-                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.displayMedium,
                   ),
                 ),
@@ -241,7 +250,7 @@ class _ProductInfo extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: onAdd,
                 icon: const Icon(Icons.add_shopping_cart),
-                label: const Text('Thêm vào giỏ'),
+                label: const Text('Thêm vào giỏ hàng'),
               ),
             ),
           ],
@@ -296,7 +305,7 @@ class _CustomizationNotice extends StatelessWidget {
         border: Border.all(color: const Color(0xFFF59E0B)),
       ),
       child: Text(
-        'Tùy chọn hương vị, topping và size sẽ hiển thị khi kiosk có cấu hình tương ứng.',
+        'Món này hiện chưa có tuỳ chọn thêm. Khi backend cung cấp cấu hình hương vị, topping hoặc size, các lựa chọn sẽ hiển thị tại đây.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
           color: const Color(0xFF92400E),
           fontWeight: FontWeight.w700,

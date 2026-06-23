@@ -46,8 +46,8 @@ class KioskStatusPresenter {
         orderPaymentStatus == PaymentStatus.paid ||
         currentOrderPaymentStatus == PaymentStatus.paid) {
       return KioskStatusViewData(
-        title: 'Thanh toán thành công',
-        message: 'IceBot đang cập nhật trạng thái đơn hàng.',
+        title: 'Đã thanh toán',
+        message: 'IceBot đã ghi nhận thanh toán và đang cập nhật đơn hàng.',
         icon: Icons.check_circle_outline,
         color: success,
       );
@@ -165,7 +165,7 @@ class KioskStatusPresenter {
         color: primary,
       ),
       OrderStatus.ready => KioskStatusViewData(
-        title: 'Kem đã sẵn sàng',
+        title: 'Món đã sẵn sàng',
         message: 'Vui lòng nhận kem tại khu vực lấy hàng.',
         icon: Icons.shopping_bag_outlined,
         color: success,
