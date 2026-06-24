@@ -74,23 +74,39 @@ class _MenuScreenState extends State<MenuScreen> {
             ? const _EmptyMenuView()
             : LayoutBuilder(
                 builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 1000;
+                  final layout = KioskLayoutSpec.of(context);
+                  final isWideLandscape = layout.isWideLandscape;
                   return Padding(
-                    padding: EdgeInsets.all(isWide ? 32 : 24),
+                    padding: EdgeInsets.all(layout.screenPadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _MenuHeader(itemCount: items.length),
-                        SizedBox(height: isWide ? 30 : 22),
+                        SizedBox(height: layout.sectionGap),
                         Expanded(
                           child: GridView.builder(
-                            gridDelegate:
-                                SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: isWide ? 410 : 350,
-                                  mainAxisSpacing: 24,
-                                  crossAxisSpacing: 24,
-                                  childAspectRatio: isWide ? 0.76 : 0.7,
-                                ),
+                            padding: EdgeInsets.only(
+                              bottom: layout.bottomOverlayPadding,
+                            ),
+                            gridDelegate: layout.isPortrait
+                                ? SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: layout.portraitMenuColumns,
+                                    mainAxisSpacing: layout.sectionGap,
+                                    crossAxisSpacing: layout.sectionGap,
+                                    childAspectRatio: layout.isCompact
+                                        ? 0.78
+                                        : 0.72,
+                                  )
+                                : SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: isWideLandscape
+                                        ? 410
+                                        : 350,
+                                    mainAxisSpacing: 24,
+                                    crossAxisSpacing: 24,
+                                    childAspectRatio: isWideLandscape
+                                        ? 0.76
+                                        : 0.7,
+                                  ),
                             itemCount: items.length,
                             itemBuilder: (context, index) {
                               return _MenuItemCard(item: items[index]);
@@ -264,7 +280,7 @@ class _MenuItemCard extends StatelessWidget {
                     item.description?.isNotEmpty == true
                         ? item.description!
                         : 'Kem tươi IceBot',
-                    maxLines: 2,
+                    maxLines: KioskLayoutSpec.of(context).isCompact ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -302,6 +318,20 @@ class _CartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final layout = KioskLayoutSpec.of(context);
+
+    if (layout.isCompact) {
+      return Badge.count(
+        count: count,
+        isLabelVisible: count > 0,
+        child: IconButton(
+          tooltip: 'Giỏ hàng',
+          onPressed: () => context.go(AppRouter.cart),
+          icon: const Icon(Icons.shopping_cart_outlined),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: Badge.count(

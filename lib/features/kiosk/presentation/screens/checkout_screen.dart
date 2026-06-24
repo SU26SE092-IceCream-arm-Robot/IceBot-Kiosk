@@ -41,10 +41,12 @@ class CheckoutScreen extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 980;
+            final layout = KioskLayoutSpec.of(context);
+            final useWideLayout =
+                !layout.useSingleColumn && constraints.maxWidth >= 980;
             return Padding(
-              padding: EdgeInsets.all(isWide ? 32 : 24),
-              child: isWide
+              padding: EdgeInsets.all(layout.screenPadding),
+              child: useWideLayout
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -62,11 +64,15 @@ class CheckoutScreen extends StatelessWidget {
                   : ListView(
                       children: [
                         SizedBox(
-                          height: 420,
+                          height: _checkoutItemsHeight(
+                            controller.cartLines.length,
+                            layout,
+                          ),
                           child: _CheckoutItems(lines: controller.cartLines),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: layout.sectionGap),
                         _CheckoutAction(controller: controller),
+                        SizedBox(height: layout.bottomOverlayPadding),
                       ],
                     ),
             );
@@ -74,6 +80,19 @@ class CheckoutScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  double _checkoutItemsHeight(int lineCount, KioskLayoutSpec layout) {
+    final baseHeight = layout.isCompact ? 200.0 : 340.0;
+    final itemHeight = layout.isCompact ? 64.0 : 86.0;
+    final wantedHeight = baseHeight + lineCount * itemHeight;
+    if (layout.isCompact) {
+      return wantedHeight.clamp(280.0, 380.0).toDouble();
+    }
+    if (layout.isTallKiosk) {
+      return wantedHeight.clamp(420.0, 720.0).toDouble();
+    }
+    return wantedHeight.clamp(360.0, 520.0).toDouble();
   }
 }
 
@@ -156,10 +175,7 @@ class _CheckoutAction extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const KioskInfoPill(
-            icon: Icons.qr_code_2_outlined,
-            label: 'Thanh toán bằng mã QR ở bước tiếp theo',
-          ),
+          const _PaymentInstructionBanner(),
           const SizedBox(height: 22),
           Text('Cần thanh toán', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
@@ -197,6 +213,43 @@ class _CheckoutAction extends StatelessWidget {
               controller.isCheckingOut
                   ? 'Đang tạo mã thanh toán...'
                   : 'Tạo mã thanh toán',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentInstructionBanner extends StatelessWidget {
+  const _PaymentInstructionBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.qr_code_2_outlined,
+            color: colorScheme.onPrimaryContainer,
+            size: 24,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Thanh toán bằng mã QR ở bước tiếp theo',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],

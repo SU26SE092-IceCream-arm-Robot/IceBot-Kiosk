@@ -129,7 +129,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 980;
+            final layout = KioskLayoutSpec.of(context);
+            final useWideLayout =
+                !layout.useSingleColumn && constraints.maxWidth >= 980;
             final statusPanel = _OrderStatusPanel(
               order: order,
               statusView: statusView,
@@ -153,8 +155,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             );
 
             return Padding(
-              padding: EdgeInsets.all(isWide ? 32 : 24),
-              child: isWide
+              padding: EdgeInsets.all(layout.screenPadding),
+              child: useWideLayout
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -166,8 +168,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   : ListView(
                       children: [
                         statusPanel,
-                        const SizedBox(height: 20),
+                        SizedBox(height: layout.sectionGap),
                         actionPanel,
+                        SizedBox(height: layout.bottomOverlayPadding),
                       ],
                     ),
             );
@@ -193,12 +196,18 @@ class _OrderStatusPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final layout = KioskLayoutSpec.of(context);
+
     return KioskSectionCard(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(layout.isCompact ? 22 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(statusView.icon, color: statusView.color, size: 112),
+          Icon(
+            statusView.icon,
+            color: statusView.color,
+            size: layout.isCompact ? 92 : 112,
+          ),
           const SizedBox(height: 24),
           Text(
             statusView.title,
@@ -362,20 +371,39 @@ class _OrderStepIndicator extends StatelessWidget {
       'Hoàn tất',
     ];
 
-    return Row(
-      children: [
-        for (var index = 0; index < labels.length; index++) ...[
-          Expanded(
-            child: _StepPill(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useVerticalSteps = constraints.maxWidth < 620;
+        final pills = [
+          for (var index = 0; index < labels.length; index++)
+            _StepPill(
               label: labels[index],
               active: !isFailed && index <= currentStep,
               current: !isFailed && index == currentStep,
               failed: isFailed && index == currentStep,
             ),
-          ),
-          if (index != labels.length - 1) const SizedBox(width: 8),
-        ],
-      ],
+        ];
+
+        if (useVerticalSteps) {
+          return Column(
+            children: [
+              for (var index = 0; index < pills.length; index++) ...[
+                SizedBox(width: double.infinity, child: pills[index]),
+                if (index != pills.length - 1) const SizedBox(height: 10),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            for (var index = 0; index < pills.length; index++) ...[
+              Expanded(child: pills[index]),
+              if (index != pills.length - 1) const SizedBox(width: 8),
+            ],
+          ],
+        );
+      },
     );
   }
 

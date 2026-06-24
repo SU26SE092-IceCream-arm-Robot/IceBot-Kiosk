@@ -27,7 +27,9 @@ class CartScreen extends StatelessWidget {
             ? const _EmptyCartView()
             : LayoutBuilder(
                 builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 980;
+                  final layout = KioskLayoutSpec.of(context);
+                  final useWideLayout =
+                      !layout.useSingleColumn && constraints.maxWidth >= 980;
                   final list = ListView.separated(
                     itemCount: controller.cartLines.length,
                     separatorBuilder: (context, index) =>
@@ -38,8 +40,8 @@ class CartScreen extends StatelessWidget {
                   );
 
                   return Padding(
-                    padding: EdgeInsets.all(isWide ? 32 : 24),
-                    child: isWide
+                    padding: EdgeInsets.all(layout.screenPadding),
+                    child: useWideLayout
                         ? Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -51,11 +53,22 @@ class CartScreen extends StatelessWidget {
                               ),
                             ],
                           )
-                        : Column(
+                        : ListView(
                             children: [
-                              Expanded(child: list),
-                              const SizedBox(height: 20),
+                              for (
+                                var index = 0;
+                                index < controller.cartLines.length;
+                                index++
+                              ) ...[
+                                _CartLineTile(
+                                  line: controller.cartLines[index],
+                                ),
+                                if (index != controller.cartLines.length - 1)
+                                  const SizedBox(height: 16),
+                              ],
+                              SizedBox(height: layout.sectionGap),
                               _CartSummary(controller: controller),
+                              SizedBox(height: layout.bottomOverlayPadding),
                             ],
                           ),
                   );
@@ -92,87 +105,168 @@ class _CartLineTile extends StatelessWidget {
 
     final colorScheme = Theme.of(context).colorScheme;
 
-    return KioskSectionCard(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.icecream_outlined,
-              color: colorScheme.onPrimaryContainer,
-              size: 46,
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  line.item.displayName,
-                  style: Theme.of(context).textTheme.headlineMedium,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompactLine = constraints.maxWidth < 640;
+
+        return KioskSectionCard(
+          padding: EdgeInsets.all(isCompactLine ? 18 : 20),
+          child: isCompactLine
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        _CartItemIcon(colorScheme: colorScheme),
+                        const SizedBox(width: 16),
+                        Expanded(child: _CartItemTitle(line: line)),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        _QuantityControls(line: line, controller: controller),
+                        const Spacer(),
+                        Text(
+                          KioskFormatters.money(
+                            line.lineTotal,
+                            currency: line.item.currency,
+                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: 'Xóa món',
+                          onPressed: () =>
+                              controller.removeFromCart(line.item.menuItemId),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    _CartItemIcon(colorScheme: colorScheme),
+                    const SizedBox(width: 20),
+                    Expanded(child: _CartItemTitle(line: line)),
+                    const SizedBox(width: 16),
+                    _QuantityControls(line: line, controller: controller),
+                    const SizedBox(width: 20),
+                    SizedBox(
+                      width: 160,
+                      child: Text(
+                        KioskFormatters.money(
+                          line.lineTotal,
+                          currency: line.item.currency,
+                        ),
+                        textAlign: TextAlign.right,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton.filledTonal(
+                      tooltip: 'Xóa món',
+                      onPressed: () =>
+                          controller.removeFromCart(line.item.menuItemId),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  KioskFormatters.money(
-                    line.item.finalPrice,
-                    currency: line.item.currency,
-                  ),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          IconButton.filledTonal(
-            iconSize: 30,
-            onPressed: () => controller.decreaseQuantity(line.item.menuItemId),
-            icon: const Icon(Icons.remove),
-          ),
-          SizedBox(
-            width: 72,
-            child: Text(
-              '${line.quantity}',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ),
-          IconButton.filledTonal(
-            iconSize: 30,
-            onPressed: () => controller.increaseQuantity(line.item.menuItemId),
-            icon: const Icon(Icons.add),
-          ),
-          const SizedBox(width: 20),
-          SizedBox(
-            width: 160,
-            child: Text(
-              KioskFormatters.money(
-                line.lineTotal,
-                currency: line.item.currency,
-              ),
-              textAlign: TextAlign.right,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(width: 12),
-          IconButton.filledTonal(
-            tooltip: 'Xóa món',
-            onPressed: () => controller.removeFromCart(line.item.menuItemId),
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
+        );
+      },
+    );
+  }
+}
+
+class _CartItemIcon extends StatelessWidget {
+  const _CartItemIcon({required this.colorScheme});
+
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
       ),
+      child: Icon(
+        Icons.icecream_outlined,
+        color: colorScheme.onPrimaryContainer,
+        size: 46,
+      ),
+    );
+  }
+}
+
+class _CartItemTitle extends StatelessWidget {
+  const _CartItemTitle({required this.line});
+
+  final CartLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          line.item.displayName,
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          KioskFormatters.money(
+            line.item.finalPrice,
+            currency: line.item.currency,
+          ),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuantityControls extends StatelessWidget {
+  const _QuantityControls({required this.line, required this.controller});
+
+  final CartLine line;
+  final KioskController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton.filledTonal(
+          iconSize: 30,
+          onPressed: () => controller.decreaseQuantity(line.item.menuItemId),
+          icon: const Icon(Icons.remove),
+        ),
+        SizedBox(
+          width: 64,
+          child: Text(
+            '${line.quantity}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+        ),
+        IconButton.filledTonal(
+          iconSize: 30,
+          onPressed: () => controller.increaseQuantity(line.item.menuItemId),
+          icon: const Icon(Icons.add),
+        ),
+      ],
     );
   }
 }

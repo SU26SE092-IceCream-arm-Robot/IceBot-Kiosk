@@ -1,5 +1,39 @@
 import 'package:flutter/material.dart';
 
+class KioskLayoutSpec {
+  const KioskLayoutSpec({
+    required this.width,
+    required this.height,
+    required this.isPortrait,
+    required this.isTallKiosk,
+  });
+
+  final double width;
+  final double height;
+  final bool isPortrait;
+  final bool isTallKiosk;
+
+  bool get isCompact => width < 700;
+  bool get isWideLandscape => !isPortrait && width >= 980;
+  bool get useSingleColumn => isTallKiosk || !isWideLandscape;
+  int get portraitMenuColumns => width < 700 ? 1 : 2;
+  double get screenPadding => isCompact ? 18 : 28;
+  double get sectionGap => isCompact ? 16 : 22;
+  double get maxPortraitPanelWidth => isCompact ? double.infinity : 760;
+  double get bottomOverlayPadding => isCompact ? 112 : 96;
+
+  static KioskLayoutSpec of(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isPortrait = size.height > size.width;
+    return KioskLayoutSpec(
+      width: size.width,
+      height: size.height,
+      isPortrait: isPortrait,
+      isTallKiosk: isPortrait && size.height / size.width >= 1.8,
+    );
+  }
+}
+
 class KioskSectionCard extends StatelessWidget {
   const KioskSectionCard({
     required this.child,
@@ -33,27 +67,31 @@ class KioskLoadingPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final layout = KioskLayoutSpec.of(context);
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820),
+        constraints: BoxConstraints(maxWidth: layout.maxPortraitPanelWidth),
         child: Padding(
-          padding: const EdgeInsets.all(40),
+          padding: EdgeInsets.all(layout.screenPadding),
           child: KioskSectionCard(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 44),
+            padding: EdgeInsets.symmetric(
+              horizontal: layout.isCompact ? 26 : 44,
+              vertical: layout.isCompact ? 32 : 44,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 124,
-                  height: 124,
+                  width: layout.isCompact ? 108 : 124,
+                  height: layout.isCompact ? 108 : 124,
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     icon,
-                    size: 76,
+                    size: layout.isCompact ? 66 : 76,
                     color: colorScheme.onPrimaryContainer,
                   ),
                 ),
@@ -61,7 +99,9 @@ class KioskLoadingPanel extends StatelessWidget {
                 Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayLarge,
+                  style: layout.isCompact
+                      ? Theme.of(context).textTheme.displayMedium
+                      : Theme.of(context).textTheme.displayLarge,
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -71,7 +111,7 @@ class KioskLoadingPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
-                  width: 320,
+                  width: layout.isCompact ? 240 : 320,
                   child: LinearProgressIndicator(
                     minHeight: 8,
                     borderRadius: BorderRadius.circular(8),
@@ -105,20 +145,21 @@ class KioskEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final layout = KioskLayoutSpec.of(context);
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
+        constraints: BoxConstraints(maxWidth: layout.maxPortraitPanelWidth),
         child: Padding(
-          padding: const EdgeInsets.all(40),
+          padding: EdgeInsets.all(layout.screenPadding),
           child: KioskSectionCard(
-            padding: const EdgeInsets.all(40),
+            padding: EdgeInsets.all(layout.isCompact ? 28 : 40),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 116,
-                  height: 116,
+                  width: layout.isCompact ? 104 : 116,
+                  height: layout.isCompact ? 104 : 116,
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
@@ -126,7 +167,7 @@ class KioskEmptyState extends StatelessWidget {
                   child: Icon(
                     icon,
                     color: colorScheme.onPrimaryContainer,
-                    size: 66,
+                    size: layout.isCompact ? 58 : 66,
                   ),
                 ),
                 const SizedBox(height: 24),

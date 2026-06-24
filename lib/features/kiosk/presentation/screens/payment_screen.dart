@@ -131,7 +131,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 980;
+            final layout = KioskLayoutSpec.of(context);
+            final useWideLayout =
+                !layout.useSingleColumn && constraints.maxWidth >= 980;
             final summary = _PaymentSummary(
               order: order,
               session: session,
@@ -155,8 +157,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
             final qrPanel = _QrPayloadPanel(session: session);
 
             return Padding(
-              padding: EdgeInsets.all(isWide ? 32 : 24),
-              child: isWide
+              padding: EdgeInsets.all(layout.screenPadding),
+              child: useWideLayout
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -166,7 +168,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ],
                     )
                   : ListView(
-                      children: [summary, const SizedBox(height: 20), qrPanel],
+                      children: [
+                        summary,
+                        SizedBox(height: layout.sectionGap),
+                        qrPanel,
+                        SizedBox(height: layout.bottomOverlayPadding),
+                      ],
                     ),
             );
           },
@@ -199,8 +206,10 @@ class _PaymentSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final layout = KioskLayoutSpec.of(context);
+
     return KioskSectionCard(
-      padding: const EdgeInsets.all(30),
+      padding: EdgeInsets.all(layout.isCompact ? 22 : 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -236,6 +245,10 @@ class _PaymentSummary extends StatelessWidget {
             label: 'Hết hạn',
             value: KioskFormatters.shortDateTime(session.expiresAt),
           ),
+          if (AppConfig.demoMode) ...[
+            const SizedBox(height: 4),
+            const _DemoPaymentSummaryNotice(),
+          ],
           if (isPolling) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(minHeight: 6),
@@ -258,6 +271,30 @@ class _PaymentSummary extends StatelessWidget {
               label: const Text('Tạo đơn mới'),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _DemoPaymentSummaryNotice extends StatelessWidget {
+  const _DemoPaymentSummaryNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+      ),
+      child: Text(
+        'Chế độ demo: không dùng để thanh toán thật.',
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          color: const Color(0xFF92400E),
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -296,9 +333,10 @@ class _QrPayloadPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final payload = session.qrCodePayload?.trim();
     final checkoutUrl = session.checkoutUrl?.trim();
+    final layout = KioskLayoutSpec.of(context);
 
     return KioskSectionCard(
-      padding: const EdgeInsets.all(30),
+      padding: EdgeInsets.all(layout.isCompact ? 22 : 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -313,8 +351,10 @@ class _QrPayloadPanel extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Container(
-            constraints: const BoxConstraints(minHeight: 300),
-            padding: const EdgeInsets.all(24),
+            constraints: BoxConstraints(
+              minHeight: layout.isCompact ? 260 : 320,
+            ),
+            padding: EdgeInsets.all(layout.isCompact ? 18 : 24),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(8),
@@ -332,7 +372,7 @@ class _QrPayloadPanel extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.qr_code_2_outlined,
-                        size: 96,
+                        size: layout.isCompact ? 82 : 104,
                         color: Theme.of(context).colorScheme.onPrimaryContainer,
                       ),
                       const SizedBox(height: 18),

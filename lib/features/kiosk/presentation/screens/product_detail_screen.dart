@@ -58,7 +58,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 900;
+            final layout = KioskLayoutSpec.of(context);
+            final useWideLayout =
+                !layout.useSingleColumn && constraints.maxWidth >= 900;
             final info = _ProductInfo(
               item: item,
               quantity: _quantity,
@@ -73,8 +75,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             );
 
             return Padding(
-              padding: EdgeInsets.all(isWide ? 32 : 24),
-              child: isWide
+              padding: EdgeInsets.all(layout.screenPadding),
+              child: useWideLayout
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -85,9 +87,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     )
                   : ListView(
                       children: [
-                        SizedBox(height: 320, child: _ProductImage(item: item)),
-                        const SizedBox(height: 24),
+                        SizedBox(
+                          height: _portraitImageHeight(layout),
+                          child: _ProductImage(item: item),
+                        ),
+                        SizedBox(height: layout.sectionGap),
                         info,
+                        SizedBox(height: layout.bottomOverlayPadding),
                       ],
                     ),
             );
@@ -95,6 +101,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       ),
     );
+  }
+
+  double _portraitImageHeight(KioskLayoutSpec layout) {
+    if (layout.isCompact) {
+      return 260;
+    }
+    if (layout.isTallKiosk) {
+      return 520;
+    }
+    return 340;
   }
 }
 
@@ -152,9 +168,10 @@ class _ProductInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final layout = KioskLayoutSpec.of(context);
 
     return KioskSectionCard(
-      padding: const EdgeInsets.all(30),
+      padding: EdgeInsets.all(layout.isCompact ? 22 : 30),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,20 +215,20 @@ class _ProductInfo extends StatelessWidget {
             const SizedBox(height: 20),
             _CustomizationNotice(),
             const SizedBox(height: 28),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
-                  child: Text(
-                    'Số lượng',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                ),
                 Text(
-                  'Tạm tính: ${KioskFormatters.money(item.finalPrice * quantity, currency: item.currency)}',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  'Số lượng',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                KioskInfoPill(
+                  label:
+                      'Tạm tính: ${KioskFormatters.money(item.finalPrice * quantity, currency: item.currency)}',
+                  backgroundColor: colorScheme.primaryContainer,
+                  foregroundColor: colorScheme.onPrimaryContainer,
                 ),
               ],
             ),
