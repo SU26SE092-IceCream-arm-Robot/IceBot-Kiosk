@@ -156,8 +156,18 @@ class KioskStatusPresenter {
         icon: Icons.check_circle_outline,
         color: success,
       ),
-      OrderStatus.readyForExecution ||
-      OrderStatus.accepted ||
+      OrderStatus.readyForExecution => KioskStatusViewData(
+        title: 'Đơn đang chờ xử lý',
+        message: 'Hệ thống đang xếp lịch xử lý đơn hàng của bạn.',
+        icon: Icons.schedule_outlined,
+        color: primary,
+      ),
+      OrderStatus.accepted => KioskStatusViewData(
+        title: 'Hệ thống đã nhận đơn',
+        message: 'Đơn hàng đã được tiếp nhận và đang chờ bước chuẩn bị.',
+        icon: Icons.inventory_2_outlined,
+        color: primary,
+      ),
       OrderStatus.preparing => KioskStatusViewData(
         title: 'Robot đang chuẩn bị',
         message: 'Đơn hàng đang được xử lý. Vui lòng đợi trong giây lát.',

@@ -13,13 +13,20 @@ class KioskController extends ChangeNotifier {
     required MenuRepository menuRepository,
     required OrderRepository orderRepository,
     required PaymentRepository paymentRepository,
+    String? kioskId,
   }) : _menuRepository = menuRepository,
        _orderRepository = orderRepository,
-       _paymentRepository = paymentRepository;
+       _paymentRepository = paymentRepository,
+       _kioskId = kioskId?.trim().isNotEmpty == true
+           ? kioskId!.trim()
+           : AppConfig.effectiveKioskId,
+       _hasKioskId = kioskId?.trim().isNotEmpty == true || AppConfig.hasKioskId;
 
   final MenuRepository _menuRepository;
   final OrderRepository _orderRepository;
   final PaymentRepository _paymentRepository;
+  final String _kioskId;
+  final bool _hasKioskId;
 
   RuntimeMenuResult? _menu;
   ApiException? _menuError;
@@ -34,6 +41,10 @@ class KioskController extends ChangeNotifier {
   PaymentStatusResult? _activePaymentStatus;
   ApiException? _trackingError;
   bool _isCancellingOrder = false;
+  _CheckoutIntent? _checkoutIntent;
+  OrderResult? _recoverableOrder;
+  String? _paymentAttemptIdempotencyKey;
+  int _nonceSequence = 0;
 
   RuntimeMenuResult? get menu => _menu;
   ApiException? get menuError => _menuError;
@@ -56,9 +67,17 @@ class KioskController extends ChangeNotifier {
   PaymentStatusResult? get activePaymentStatus => _activePaymentStatus;
   ApiException? get trackingError => _trackingError;
   bool get isCancellingOrder => _isCancellingOrder;
+  bool get canRetryPayment {
+    final order = _recoverableOrder ?? _activeOrder;
+    if (order == null) {
+      return false;
+    }
+
+    return _activePaymentStatus?.canRetryPayment ?? order.canRetryPayment;
+  }
 
   Future<void> loadMenu({bool force = false}) async {
-    if (!AppConfig.hasKioskId) {
+    if (!_hasKioskId) {
       return;
     }
     if (_isLoadingMenu) {
@@ -73,7 +92,7 @@ class KioskController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _menu = await _menuRepository.getRuntimeMenu(AppConfig.effectiveKioskId);
+      _menu = await _menuRepository.getRuntimeMenu(_kioskId);
       _menuError = null;
     } on ApiException catch (error) {
       _menu = null;
@@ -152,7 +171,7 @@ class KioskController extends ChangeNotifier {
   }
 
   Future<CheckoutResult?> checkout() async {
-    if (_cartLines.isEmpty || _menu == null || !AppConfig.hasKioskId) {
+    if (_cartLines.isEmpty || _menu == null || !_hasKioskId) {
       return null;
     }
     if (_isCheckingOut) {
@@ -163,39 +182,26 @@ class KioskController extends ChangeNotifier {
     _checkoutError = null;
     notifyListeners();
 
-    final nonce = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
-    final orderRequest = CreateOrderRequest(
-      kioskId: AppConfig.effectiveKioskId,
-      idempotencyKey: 'tablet-order-$nonce',
-      clientOrderId: 'tablet-$nonce',
-      runtimeSnapshotId: _menu!.snapshotId,
-      runtimeSnapshotGeneratedAt: _menu!.generatedAt,
-      clientTotalAmount: cartTotal,
-      items: cartLines
-          .map(
-            (line) => CreateOrderItemRequest(
-              menuItemId: line.item.menuItemId,
-              clientLineId: 'line-${line.item.menuItemId}',
-              quantity: line.quantity,
-            ),
-          )
-          .toList(growable: false),
-    );
-
     try {
-      final order = await _orderRepository.createOrder(orderRequest);
-      final paymentSession = await _paymentRepository.createPaymentSession(
-        order.id,
-        idempotencyKey: 'tablet-payment-$nonce',
-        description: 'IceBot ${order.orderNumber}',
-      );
+      final fingerprint = _cartFingerprint;
+      var intent = _checkoutIntent;
+      if (intent == null || intent.cartFingerprint != fingerprint) {
+        intent = _createCheckoutIntent(fingerprint);
+        _checkoutIntent = intent;
+        _recoverableOrder = null;
+        _paymentAttemptIdempotencyKey = null;
+        _activePaymentSession = null;
+        _activePaymentStatus = null;
+      }
 
+      final order =
+          _recoverableOrder ??
+          await _orderRepository.createOrder(intent.orderRequest);
       _activeOrder = order;
-      _activePaymentSession = paymentSession;
-      _activePaymentStatus = null;
-      _trackingError = null;
-      _cartLines.clear();
-      return CheckoutResult(order: order, paymentSession: paymentSession);
+      _recoverableOrder = order;
+      notifyListeners();
+
+      return await _createPaymentSessionFor(order);
     } on ApiException catch (error) {
       _checkoutError = error;
       return null;
@@ -209,6 +215,112 @@ class KioskController extends ChangeNotifier {
       _isCheckingOut = false;
       notifyListeners();
     }
+  }
+
+  Future<CheckoutResult?> retryPaymentSession() async {
+    final order = _recoverableOrder ?? _activeOrder;
+    if (order == null || _isCheckingOut || !canRetryPayment) {
+      return null;
+    }
+
+    _isCheckingOut = true;
+    _checkoutError = null;
+    _trackingError = null;
+
+    // A completed failed/expired session is a new payment attempt. For an
+    // uncertain network failure before a session was returned, the existing
+    // key is retained so the backend can deduplicate the retry.
+    if (_activePaymentSession != null) {
+      _paymentAttemptIdempotencyKey = null;
+    }
+    notifyListeners();
+
+    try {
+      return await _createPaymentSessionFor(order);
+    } on ApiException catch (error) {
+      _checkoutError = error;
+      return null;
+    } on Object {
+      _checkoutError = const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Không thể tạo lại phiên thanh toán.',
+      );
+      return null;
+    } finally {
+      _isCheckingOut = false;
+      notifyListeners();
+    }
+  }
+
+  Future<CheckoutResult> _createPaymentSessionFor(OrderResult order) async {
+    final paymentKey = _paymentAttemptIdempotencyKey ??=
+        'tablet-payment-${_newNonce()}';
+
+    try {
+      final paymentSession = await _paymentRepository.createPaymentSession(
+        order.id,
+        idempotencyKey: paymentKey,
+        description: 'IceBot ${order.orderNumber}',
+      );
+
+      _activeOrder = order;
+      _activePaymentSession = paymentSession;
+      _activePaymentStatus = null;
+      _trackingError = null;
+      _checkoutError = null;
+      _recoverableOrder = null;
+      _checkoutIntent = null;
+      _paymentAttemptIdempotencyKey = null;
+      _cartLines.clear();
+      return CheckoutResult(order: order, paymentSession: paymentSession);
+    } on ApiException catch (error) {
+      if (error.type != ApiErrorType.network &&
+          error.type != ApiErrorType.timeout) {
+        _paymentAttemptIdempotencyKey = null;
+      }
+      rethrow;
+    }
+  }
+
+  _CheckoutIntent _createCheckoutIntent(String cartFingerprint) {
+    final nonce = _newNonce();
+    return _CheckoutIntent(
+      cartFingerprint: cartFingerprint,
+      orderRequest: CreateOrderRequest(
+        kioskId: _kioskId,
+        idempotencyKey: 'tablet-order-$nonce',
+        clientOrderId: 'tablet-$nonce',
+        runtimeSnapshotId: _menu!.snapshotId,
+        runtimeSnapshotGeneratedAt: _menu!.generatedAt,
+        clientTotalAmount: cartTotal,
+        items: cartLines
+            .map(
+              (line) => CreateOrderItemRequest(
+                menuItemId: line.item.menuItemId,
+                clientLineId: 'line-${line.item.menuItemId}',
+                quantity: line.quantity,
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  String get _cartFingerprint {
+    final parts =
+        cartLines
+            .map(
+              (line) =>
+                  '${line.item.menuItemId}:${line.quantity}:${line.item.finalPrice}',
+            )
+            .toList(growable: false)
+          ..sort();
+    return parts.join('|');
+  }
+
+  String _newNonce() {
+    final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch;
+    return '$timestamp-${_nonceSequence++}';
   }
 
   Future<PaymentStatusResult?> refreshPaymentStatus(String orderId) async {
@@ -304,4 +416,14 @@ class CheckoutResult {
 
   final OrderResult order;
   final PaymentSessionResult paymentSession;
+}
+
+class _CheckoutIntent {
+  const _CheckoutIntent({
+    required this.cartFingerprint,
+    required this.orderRequest,
+  });
+
+  final String cartFingerprint;
+  final CreateOrderRequest orderRequest;
 }

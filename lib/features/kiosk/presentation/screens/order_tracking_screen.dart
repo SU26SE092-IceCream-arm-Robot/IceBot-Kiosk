@@ -27,6 +27,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   DateTime? _startedAt;
   bool _startedPolling = false;
   bool _timedOut = false;
+  bool _pollInFlight = false;
 
   @override
   void didChangeDependencies() {
@@ -37,8 +38,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     _startedPolling = true;
     _startedAt = DateTime.now();
-    _pollNow();
-    _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
+    _startPolling();
   }
 
   @override
@@ -48,7 +48,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Future<void> _pollNow() async {
-    if (!mounted || _timedOut) {
+    if (!mounted || _timedOut || _pollInFlight) {
       return;
     }
 
@@ -59,15 +59,26 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       return;
     }
 
-    final controller = KioskScope.of(context);
-    final order = await controller.refreshOrder(widget.orderId);
-    if (!mounted || order == null) {
-      return;
-    }
+    _pollInFlight = true;
+    try {
+      final controller = KioskScope.of(context);
+      final order = await controller.refreshOrder(widget.orderId);
+      if (!mounted || order == null) {
+        return;
+      }
 
-    if (KioskStatusPresenter.isOrderTerminal(order)) {
-      _stopPolling();
+      if (KioskStatusPresenter.isOrderTerminal(order)) {
+        _stopPolling();
+      }
+    } finally {
+      _pollInFlight = false;
     }
+  }
+
+  void _startPolling() {
+    _stopPolling();
+    _pollNow();
+    _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
   }
 
   void _stopPolling() {
@@ -127,54 +138,56 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final layout = KioskLayoutSpec.of(context);
-            final useWideLayout =
-                !layout.useSingleColumn && constraints.maxWidth >= 980;
-            final statusPanel = _OrderStatusPanel(
-              order: order,
-              statusView: statusView,
-              isPolling: _timer != null,
-              errorMessage: controller.trackingError?.message,
-            );
-            final actionPanel = _OrderActionPanel(
-              order: order,
-              canCancel: KioskStatusPresenter.canCancelBeforePaid(
-                order,
-                controller.activePaymentStatus,
-              ),
-              isCancelling: controller.isCancellingOrder,
-              onCancel: () async {
-                _stopPolling();
-                final cancelled = await controller.cancelActiveOrder();
-                if (mounted && cancelled == null) {
-                  _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
-                }
-              },
-            );
+        child: KioskBackdrop(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final layout = KioskLayoutSpec.of(context);
+              final useWideLayout =
+                  !layout.useSingleColumn && constraints.maxWidth >= 980;
+              final statusPanel = _OrderStatusPanel(
+                order: order,
+                statusView: statusView,
+                isPolling: _timer != null,
+                errorMessage: controller.trackingError?.message,
+              );
+              final actionPanel = _OrderActionPanel(
+                order: order,
+                canCancel: KioskStatusPresenter.canCancelBeforePaid(
+                  order,
+                  controller.activePaymentStatus,
+                ),
+                isCancelling: controller.isCancellingOrder,
+                onCancel: () async {
+                  _stopPolling();
+                  final cancelled = await controller.cancelActiveOrder();
+                  if (mounted && cancelled == null) {
+                    _startPolling();
+                  }
+                },
+              );
 
-            return Padding(
-              padding: EdgeInsets.all(layout.screenPadding),
-              child: useWideLayout
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(flex: 6, child: statusPanel),
-                        const SizedBox(width: 28),
-                        Expanded(flex: 4, child: actionPanel),
-                      ],
-                    )
-                  : ListView(
-                      children: [
-                        statusPanel,
-                        SizedBox(height: layout.sectionGap),
-                        actionPanel,
-                        SizedBox(height: layout.bottomOverlayPadding),
-                      ],
-                    ),
-            );
-          },
+              return Padding(
+                padding: EdgeInsets.all(layout.screenPadding),
+                child: useWideLayout
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 6, child: statusPanel),
+                          const SizedBox(width: 28),
+                          Expanded(flex: 4, child: actionPanel),
+                        ],
+                      )
+                    : ListView(
+                        children: [
+                          statusPanel,
+                          SizedBox(height: layout.sectionGap),
+                          actionPanel,
+                          SizedBox(height: layout.bottomOverlayPadding),
+                        ],
+                      ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -203,10 +216,21 @@ class _OrderStatusPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            statusView.icon,
-            color: statusView.color,
-            size: layout.isCompact ? 92 : 112,
+          Container(
+            width: layout.isCompact ? 116 : 136,
+            height: layout.isCompact ? 116 : 136,
+            decoration: BoxDecoration(
+              color: statusView.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: statusView.color.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Icon(
+              statusView.icon,
+              color: statusView.color,
+              size: layout.isCompact ? 72 : 84,
+            ),
           ),
           const SizedBox(height: 24),
           Text(
@@ -258,6 +282,7 @@ class _InlineWarning extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.errorContainer,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.error),
       ),
       child: Text(
         message,
@@ -340,7 +365,8 @@ class _OrderActionPanel extends StatelessWidget {
       OrderStatus.draft => 'Đang nhập đơn',
       OrderStatus.pendingPayment => 'Đang chờ thanh toán',
       OrderStatus.paid => 'Đã thanh toán',
-      OrderStatus.readyForExecution || OrderStatus.accepted => 'Đã nhận đơn',
+      OrderStatus.readyForExecution => 'Đơn đang chờ xử lý',
+      OrderStatus.accepted => 'Hệ thống đã nhận đơn',
       OrderStatus.preparing => 'Robot đang chuẩn bị',
       OrderStatus.ready => 'Món đã sẵn sàng',
       OrderStatus.completed => 'Hoàn tất',
@@ -364,10 +390,14 @@ class _OrderStepIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentStep = _stepFor(order);
     final isFailed = _isProblemState(order);
-    final labels = const [
+    final labels = [
       'Đã tạo đơn',
       'Đã thanh toán',
-      'Đang chuẩn bị',
+      switch (order.status) {
+        OrderStatus.readyForExecution => 'Chờ xử lý',
+        OrderStatus.accepted => 'Đã nhận đơn',
+        _ => 'Đang chuẩn bị',
+      },
       'Hoàn tất',
     ];
 
@@ -459,9 +489,9 @@ class _StepPill extends StatelessWidget {
         : const Color(0xFFCBD5E1);
 
     return Container(
-      height: 56,
+      constraints: const BoxConstraints(minHeight: 60),
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: failed
             ? const Color(0xFFFEE2E2)

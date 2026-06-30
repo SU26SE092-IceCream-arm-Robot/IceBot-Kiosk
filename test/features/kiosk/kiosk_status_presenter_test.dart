@@ -47,6 +47,16 @@ void main() {
     expect(view.title, 'Đã thanh toán');
   });
 
+  test('uses neutral copy until order is actually preparing', () {
+    final readyForExecution = _present(OrderStatus.readyForExecution);
+    final accepted = _present(OrderStatus.accepted);
+    final preparing = _present(OrderStatus.preparing);
+
+    expect(readyForExecution.title, 'Đơn đang chờ xử lý');
+    expect(accepted.title, 'Hệ thống đã nhận đơn');
+    expect(preparing.title, 'Robot đang chuẩn bị');
+  });
+
   test('allows cancel only before paid', () {
     final pendingOrder = _order(status: OrderStatus.pendingPayment);
     final paidOrder = _order(
@@ -60,6 +70,16 @@ void main() {
     );
     expect(KioskStatusPresenter.canCancelBeforePaid(paidOrder, null), isFalse);
   });
+}
+
+KioskStatusViewData _present(OrderStatus status) {
+  return KioskStatusPresenter.order(
+    _order(status: status, paymentStatus: PaymentStatus.paid),
+    primary: Colors.teal,
+    success: Colors.green,
+    warning: Colors.orange,
+    danger: Colors.red,
+  );
 }
 
 PaymentStatusResult _paymentStatus({

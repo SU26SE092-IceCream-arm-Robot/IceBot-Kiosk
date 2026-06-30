@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
+import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
+import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
@@ -32,6 +35,89 @@ void main() {
     controller.clearCart();
     expect(controller.isCartEmpty, isTrue);
   });
+
+  test('retains created order when payment session creation fails', () async {
+    final orderRepository = _RecordingOrderRepository();
+    final paymentRepository = _FlakyPaymentRepository(failures: 1);
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: paymentRepository,
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+
+    final result = await controller.checkout();
+
+    expect(result, isNull);
+    expect(controller.activeOrder?.id, 'order-id');
+    expect(controller.isCartEmpty, isFalse);
+    expect(controller.checkoutError?.type, ApiErrorType.upstream);
+    expect(orderRepository.createCalls, 1);
+  });
+
+  test('payment retry reuses order and does not create a duplicate', () async {
+    final orderRepository = _RecordingOrderRepository();
+    final paymentRepository = _FlakyPaymentRepository(failures: 1);
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: paymentRepository,
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+    expect(await controller.checkout(), isNull);
+
+    final retryResult = await controller.retryPaymentSession();
+
+    expect(retryResult?.order.id, 'order-id');
+    expect(retryResult?.paymentSession.orderId, 'order-id');
+    expect(orderRepository.createCalls, 1);
+    expect(paymentRepository.orderIds, ['order-id', 'order-id']);
+    expect(paymentRepository.idempotencyKeys, hasLength(2));
+    expect(
+      paymentRepository.idempotencyKeys[0],
+      isNot(paymentRepository.idempotencyKeys[1]),
+    );
+    expect(controller.isCartEmpty, isTrue);
+  });
+
+  test(
+    'order retry preserves idempotency key for the checkout intent',
+    () async {
+      final orderRepository = _NetworkThenSuccessOrderRepository();
+      final paymentRepository = _FlakyPaymentRepository(failures: 0);
+      final controller = _checkoutController(
+        orderRepository: orderRepository,
+        paymentRepository: paymentRepository,
+      );
+
+      await controller.loadMenu();
+      controller.addToCart(_menuItem());
+      expect(await controller.checkout(), isNull);
+
+      final result = await controller.checkout();
+
+      expect(result?.order.id, 'order-id');
+      expect(orderRepository.idempotencyKeys, hasLength(2));
+      expect(
+        orderRepository.idempotencyKeys.first,
+        orderRepository.idempotencyKeys.last,
+      );
+    },
+  );
+}
+
+KioskController _checkoutController({
+  required OrderRepository orderRepository,
+  required _FlakyPaymentRepository paymentRepository,
+}) {
+  return KioskController(
+    menuRepository: _CheckoutMenuRepository(),
+    orderRepository: orderRepository,
+    paymentRepository: paymentRepository,
+    kioskId: 'kiosk-id',
+  );
 }
 
 RuntimeMenuItem _menuItem() {
@@ -61,4 +147,114 @@ class _FakeOrderRepository extends OrderRepository {
 
 class _FakePaymentRepository extends PaymentRepository {
   _FakePaymentRepository() : super(DioClient(baseUrl: 'http://localhost'));
+}
+
+class _CheckoutMenuRepository extends MenuRepository {
+  _CheckoutMenuRepository() : super(DioClient(baseUrl: 'http://localhost'));
+
+  @override
+  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+    return RuntimeMenuResult(
+      snapshotId: 'snapshot-id',
+      kioskId: kioskId,
+      generatedAt: DateTime.utc(2026, 6, 30),
+      expiresAt: DateTime.utc(2026, 6, 30, 0, 5),
+      availabilitySource: 'CloudSalesCatalog',
+      containsMachineRuntimeState: false,
+      items: [_menuItem()],
+    );
+  }
+}
+
+class _RecordingOrderRepository extends OrderRepository {
+  _RecordingOrderRepository() : super(DioClient(baseUrl: 'http://localhost'));
+
+  int createCalls = 0;
+
+  @override
+  Future<OrderResult> createOrder(CreateOrderRequest request) async {
+    createCalls++;
+    return _orderResult();
+  }
+}
+
+class _FlakyPaymentRepository extends PaymentRepository {
+  _FlakyPaymentRepository({required this.failures})
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  int failures;
+  final List<String> orderIds = [];
+  final List<String?> idempotencyKeys = [];
+
+  @override
+  Future<PaymentSessionResult> createPaymentSession(
+    String orderId, {
+    String? idempotencyKey,
+    String? description,
+  }) async {
+    orderIds.add(orderId);
+    idempotencyKeys.add(idempotencyKey);
+    if (failures > 0) {
+      failures--;
+      throw const ApiException(
+        type: ApiErrorType.upstream,
+        statusCode: 502,
+        message: 'Payment provider unavailable.',
+      );
+    }
+
+    return PaymentSessionResult(
+      paymentTransactionId: 'payment-id',
+      orderId: orderId,
+      transactionNumber: 'PAY-001',
+      provider: 'PayOS',
+      checkoutUrl: 'https://example.test/payment',
+      qrCodePayload: 'qr-payload',
+      amount: 35000,
+      currency: 'VND',
+      status: PaymentTransactionStatus.pending,
+    );
+  }
+}
+
+class _NetworkThenSuccessOrderRepository extends OrderRepository {
+  _NetworkThenSuccessOrderRepository()
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  final List<String?> idempotencyKeys = [];
+
+  @override
+  Future<OrderResult> createOrder(CreateOrderRequest request) async {
+    idempotencyKeys.add(request.idempotencyKey);
+    if (idempotencyKeys.length == 1) {
+      throw const ApiException(
+        type: ApiErrorType.network,
+        message: 'Connection interrupted.',
+      );
+    }
+    return _orderResult();
+  }
+}
+
+OrderResult _orderResult() {
+  return OrderResult(
+    id: 'order-id',
+    kioskId: 'kiosk-id',
+    orderNumber: 'ORD-001',
+    channel: 'Tablet',
+    status: OrderStatus.pendingPayment,
+    paymentStatus: PaymentStatus.unpaid,
+    currency: 'VND',
+    subtotalAmount: 35000,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 35000,
+    paidAmount: 0,
+    placedAt: DateTime.utc(2026, 6, 30),
+    customerStatus: 'WaitingForPayment',
+    customerStatusMessage: 'Waiting for payment.',
+    canRetryPayment: true,
+    requiresStaffSupport: false,
+    items: const [],
+  );
 }

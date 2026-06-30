@@ -30,6 +30,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   DateTime? _startedAt;
   bool _startedPolling = false;
   bool _timedOut = false;
+  bool _pollInFlight = false;
 
   @override
   void didChangeDependencies() {
@@ -40,8 +41,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     _startedPolling = true;
     _startedAt = DateTime.now();
-    _pollNow();
-    _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
+    _startPolling();
   }
 
   @override
@@ -51,7 +51,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Future<void> _pollNow() async {
-    if (!mounted || _timedOut) {
+    if (!mounted || _timedOut || _pollInFlight) {
       return;
     }
 
@@ -69,23 +69,34 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
-    final status = await controller.refreshPaymentStatus(widget.orderId);
-    if (!mounted || status == null) {
-      return;
-    }
-
-    if (KioskStatusPresenter.isPaymentPaid(status)) {
-      _stopPolling();
-      await controller.refreshOrder(widget.orderId);
-      if (mounted) {
-        context.go(AppRouter.orderPath(widget.orderId));
+    _pollInFlight = true;
+    try {
+      final status = await controller.refreshPaymentStatus(widget.orderId);
+      if (!mounted || status == null) {
+        return;
       }
-      return;
-    }
 
-    if (KioskStatusPresenter.isPaymentTerminal(status)) {
-      _stopPolling();
+      if (KioskStatusPresenter.isPaymentPaid(status)) {
+        _stopPolling();
+        await controller.refreshOrder(widget.orderId);
+        if (mounted) {
+          context.go(AppRouter.orderPath(widget.orderId));
+        }
+        return;
+      }
+
+      if (KioskStatusPresenter.isPaymentTerminal(status)) {
+        _stopPolling();
+      }
+    } finally {
+      _pollInFlight = false;
     }
+  }
+
+  void _startPolling() {
+    _stopPolling();
+    _pollNow();
+    _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
   }
 
   void _stopPolling() {
@@ -129,54 +140,75 @@ class _PaymentScreenState extends State<PaymentScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final layout = KioskLayoutSpec.of(context);
-            final useWideLayout =
-                !layout.useSingleColumn && constraints.maxWidth >= 980;
-            final summary = _PaymentSummary(
-              order: order,
-              session: session,
-              statusView: statusView,
-              isPolling: _timer != null,
-              errorMessage: controller.trackingError?.message,
-              canCancel: KioskStatusPresenter.canCancelBeforePaid(
-                order,
-                controller.activePaymentStatus,
-              ),
-              isCancelling: controller.isCancellingOrder,
-              onCancel: () async {
-                _stopPolling();
-                final cancelled = await controller.cancelActiveOrder();
-                await controller.refreshPaymentStatus(widget.orderId);
-                if (mounted && cancelled == null) {
-                  _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
-                }
-              },
-            );
-            final qrPanel = _QrPayloadPanel(session: session);
+        child: KioskBackdrop(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final layout = KioskLayoutSpec.of(context);
+              final useWideLayout =
+                  !layout.useSingleColumn && constraints.maxWidth >= 980;
+              final summary = _PaymentSummary(
+                order: order,
+                session: session,
+                statusView: statusView,
+                isPolling: _timer != null,
+                errorMessage:
+                    controller.checkoutError?.message ??
+                    controller.trackingError?.message,
+                canRetryPayment:
+                    controller.canRetryPayment && (_timedOut || _timer == null),
+                isRetryingPayment: controller.isCheckingOut,
+                canCancel: KioskStatusPresenter.canCancelBeforePaid(
+                  order,
+                  controller.activePaymentStatus,
+                ),
+                isCancelling: controller.isCancellingOrder,
+                onCancel: () async {
+                  _stopPolling();
+                  final cancelled = await controller.cancelActiveOrder();
+                  await controller.refreshPaymentStatus(widget.orderId);
+                  if (mounted && cancelled == null) {
+                    _startPolling();
+                  }
+                },
+                onRetryPayment: () async {
+                  _stopPolling();
+                  final result = await controller.retryPaymentSession();
+                  if (!mounted) {
+                    return;
+                  }
+                  if (result != null) {
+                    setState(() {
+                      _timedOut = false;
+                      _startedAt = DateTime.now();
+                    });
+                    _startPolling();
+                  }
+                },
+              );
+              final qrPanel = _QrPayloadPanel(session: session);
 
-            return Padding(
-              padding: EdgeInsets.all(layout.screenPadding),
-              child: useWideLayout
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(flex: 5, child: summary),
-                        const SizedBox(width: 28),
-                        Expanded(flex: 6, child: qrPanel),
-                      ],
-                    )
-                  : ListView(
-                      children: [
-                        summary,
-                        SizedBox(height: layout.sectionGap),
-                        qrPanel,
-                        SizedBox(height: layout.bottomOverlayPadding),
-                      ],
-                    ),
-            );
-          },
+              return Padding(
+                padding: EdgeInsets.all(layout.screenPadding),
+                child: useWideLayout
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 5, child: summary),
+                          const SizedBox(width: 28),
+                          Expanded(flex: 6, child: qrPanel),
+                        ],
+                      )
+                    : ListView(
+                        children: [
+                          summary,
+                          SizedBox(height: layout.sectionGap),
+                          qrPanel,
+                          SizedBox(height: layout.bottomOverlayPadding),
+                        ],
+                      ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -190,9 +222,12 @@ class _PaymentSummary extends StatelessWidget {
     required this.statusView,
     required this.isPolling,
     required this.errorMessage,
+    required this.canRetryPayment,
+    required this.isRetryingPayment,
     required this.canCancel,
     required this.isCancelling,
     required this.onCancel,
+    required this.onRetryPayment,
   });
 
   final OrderResult order;
@@ -200,9 +235,12 @@ class _PaymentSummary extends StatelessWidget {
   final KioskStatusViewData statusView;
   final bool isPolling;
   final String? errorMessage;
+  final bool canRetryPayment;
+  final bool isRetryingPayment;
   final bool canCancel;
   final bool isCancelling;
   final Future<void> Function() onCancel;
+  final Future<void> Function() onRetryPayment;
 
   @override
   Widget build(BuildContext context) {
@@ -227,14 +265,19 @@ class _PaymentSummary extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 24),
-          _InfoRow(label: 'Mã đơn', value: order.orderNumber),
-          _InfoRow(
-            label: 'Số tiền',
-            value: KioskFormatters.money(
-              session.amount,
-              currency: session.currency,
+          Text(
+            'Số tiền cần thanh toán',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            KioskFormatters.money(session.amount, currency: session.currency),
+            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
+          const SizedBox(height: 22),
+          _InfoRow(label: 'Mã đơn', value: order.orderNumber),
           _InfoRow(
             label: 'Nhà cung cấp',
             value: session.provider.isEmpty
@@ -258,6 +301,24 @@ class _PaymentSummary extends StatelessWidget {
             _InlineWarning(message: errorMessage!),
           ],
           const SizedBox(height: 28),
+          if (canRetryPayment) ...[
+            FilledButton.icon(
+              onPressed: isRetryingPayment ? null : onRetryPayment,
+              icon: isRetryingPayment
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(
+                isRetryingPayment
+                    ? 'Đang tạo lại mã...'
+                    : 'Tạo lại mã thanh toán',
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (canCancel)
             OutlinedButton.icon(
               onPressed: isCancelling ? null : onCancel,
@@ -312,6 +373,7 @@ class _InlineWarning extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.errorContainer,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.error),
       ),
       child: Text(
         message,
@@ -341,12 +403,12 @@ class _QrPayloadPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Mã thanh toán',
+            'Nội dung thanh toán',
             style: Theme.of(context).textTheme.displayMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            'Dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã. Nếu backend chỉ trả về nội dung thanh toán, nội dung sẽ hiển thị bên dưới.',
+            'Dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã. Nếu chưa có ảnh QR, hãy dùng nội dung thanh toán hoặc mở trang thanh toán.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 20),
@@ -358,6 +420,7 @@ class _QrPayloadPanel extends StatelessWidget {
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFD8E3DF)),
             ),
             child: payload == null || payload.isEmpty
                 ? Center(
