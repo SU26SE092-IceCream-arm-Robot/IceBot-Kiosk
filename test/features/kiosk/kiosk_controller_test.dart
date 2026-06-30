@@ -106,6 +106,79 @@ void main() {
       );
     },
   );
+
+  test('runtime menu exposes valid backend items', () async {
+    final repository = _RuntimeMenuRepository([
+      _runtimeMenu(items: [_menuItem()]),
+    ]);
+    final controller = _menuController(repository);
+
+    await controller.loadMenu();
+
+    expect(controller.hasMenu, isTrue);
+    expect(controller.menuError, isNull);
+    expect(controller.menuItems.single.displayName, 'Kem vani');
+    expect(controller.menuItems.single.finalPrice, 35000);
+  });
+
+  test('empty runtime menu remains a successful empty state', () async {
+    final controller = _menuController(
+      _RuntimeMenuRepository([_runtimeMenu()]),
+    );
+
+    await controller.loadMenu();
+
+    expect(controller.hasMenu, isTrue);
+    expect(controller.menuItems, isEmpty);
+    expect(controller.menuError, isNull);
+  });
+
+  test('runtime menu backend error is retained for retry UI', () async {
+    final controller = _menuController(
+      _RuntimeMenuRepository([
+        const ApiException(
+          type: ApiErrorType.network,
+          message: 'Không thể kết nối đến máy chủ.',
+        ),
+      ]),
+    );
+
+    await controller.loadMenu();
+
+    expect(controller.hasMenu, isFalse);
+    expect(controller.menuError?.type, ApiErrorType.network);
+  });
+
+  test(
+    'menu refresh removes unavailable cart item and blocks stale add',
+    () async {
+      final repository = _RuntimeMenuRepository([
+        _runtimeMenu(items: [_menuItem()]),
+        _runtimeMenu(),
+      ]);
+      final controller = _menuController(repository);
+
+      await controller.loadMenu();
+      final staleItem = controller.menuItems.single;
+      expect(controller.addToCart(staleItem), isTrue);
+      expect(controller.cartItemCount, 1);
+
+      await controller.loadMenu(force: true);
+
+      expect(controller.menuItems, isEmpty);
+      expect(controller.isCartEmpty, isTrue);
+      expect(controller.addToCart(staleItem), isFalse);
+    },
+  );
+}
+
+KioskController _menuController(MenuRepository menuRepository) {
+  return KioskController(
+    menuRepository: menuRepository,
+    orderRepository: _FakeOrderRepository(),
+    paymentRepository: _FakePaymentRepository(),
+    kioskId: 'kiosk-id',
+  );
 }
 
 KioskController _checkoutController({
@@ -137,6 +210,18 @@ RuntimeMenuItem _menuItem() {
   );
 }
 
+RuntimeMenuResult _runtimeMenu({List<RuntimeMenuItem> items = const []}) {
+  return RuntimeMenuResult(
+    snapshotId: 'snapshot-id',
+    kioskId: 'kiosk-id',
+    generatedAt: DateTime.utc(2026, 7, 1),
+    expiresAt: DateTime.utc(2026, 7, 1, 0, 0, 15),
+    availabilitySource: 'CloudSalesCatalog',
+    containsMachineRuntimeState: false,
+    items: items,
+  );
+}
+
 class _FakeMenuRepository extends MenuRepository {
   _FakeMenuRepository() : super(DioClient(baseUrl: 'http://localhost'));
 }
@@ -163,6 +248,23 @@ class _CheckoutMenuRepository extends MenuRepository {
       containsMachineRuntimeState: false,
       items: [_menuItem()],
     );
+  }
+}
+
+class _RuntimeMenuRepository extends MenuRepository {
+  _RuntimeMenuRepository(this.responses)
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  final List<Object> responses;
+  int _index = 0;
+
+  @override
+  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+    final response = responses[_index++];
+    if (response is ApiException) {
+      throw response;
+    }
+    return response as RuntimeMenuResult;
   }
 }
 

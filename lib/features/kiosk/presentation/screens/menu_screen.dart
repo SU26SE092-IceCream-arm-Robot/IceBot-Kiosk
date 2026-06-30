@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
+import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_panel.dart';
@@ -29,7 +30,11 @@ class _MenuScreenState extends State<MenuScreen> {
     _requestedLoad = true;
     final controller = KioskScope.of(context);
     if (!controller.hasMenu && !controller.isLoadingMenu) {
-      controller.loadMenu();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          controller.loadMenu();
+        }
+      });
     }
   }
 
@@ -45,7 +50,7 @@ class _MenuScreenState extends State<MenuScreen> {
       return Scaffold(
         body: KioskBackdrop(
           child: KioskErrorPanel(
-            title: 'Kiosk đang tạm ngưng',
+            title: _errorTitle(controller.menuError!),
             error: controller.menuError,
             actionLabel: 'Thử lại',
             onAction: () => controller.loadMenu(force: true),
@@ -74,7 +79,7 @@ class _MenuScreenState extends State<MenuScreen> {
       body: SafeArea(
         child: KioskBackdrop(
           child: items.isEmpty
-              ? const _EmptyMenuView()
+              ? _EmptyMenuView(onRetry: () => controller.loadMenu(force: true))
               : LayoutBuilder(
                   builder: (context, constraints) {
                     final layout = KioskLayoutSpec.of(context);
@@ -84,7 +89,12 @@ class _MenuScreenState extends State<MenuScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _MenuHeader(itemCount: items.length),
+                          _MenuHeader(
+                            itemCount: items.length,
+                            containsMachineRuntimeState:
+                                controller.menu?.containsMachineRuntimeState ==
+                                true,
+                          ),
                           SizedBox(height: layout.sectionGap),
                           Expanded(
                             child: layout.isPortrait && items.length == 1
@@ -152,12 +162,26 @@ class _MenuScreenState extends State<MenuScreen> {
       ),
     );
   }
+
+  String _errorTitle(ApiException error) {
+    return switch (error.type) {
+      ApiErrorType.notFound => 'Không tìm thấy kiosk',
+      ApiErrorType.conflict => 'Kiosk đang tạm ngưng',
+      ApiErrorType.network || ApiErrorType.timeout => 'Không thể kết nối',
+      ApiErrorType.validation => 'Cấu hình kiosk không hợp lệ',
+      _ => 'Không thể tải menu',
+    };
+  }
 }
 
 class _MenuHeader extends StatelessWidget {
-  const _MenuHeader({required this.itemCount});
+  const _MenuHeader({
+    required this.itemCount,
+    required this.containsMachineRuntimeState,
+  });
 
   final int itemCount;
+  final bool containsMachineRuntimeState;
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +206,9 @@ class _MenuHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Chọn món kem bạn muốn mua. IceBot sẽ hướng dẫn từng bước đến khi thanh toán.',
+                  containsMachineRuntimeState
+                      ? 'Chọn món kem bạn muốn mua. IceBot sẽ hướng dẫn từng bước đến khi thanh toán.'
+                      : 'Chọn món từ menu hiện tại. Tình trạng máy và nguyên liệu sẽ được xác nhận khi tạo đơn.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ],
@@ -201,7 +227,7 @@ class _MenuHeader extends StatelessWidget {
                 ),
               KioskInfoPill(
                 icon: Icons.icecream_outlined,
-                label: '$itemCount món đang bán',
+                label: '$itemCount món trong menu',
                 backgroundColor: colorScheme.primaryContainer,
                 foregroundColor: colorScheme.onPrimaryContainer,
               ),
@@ -231,16 +257,19 @@ class _MenuLoadingView extends StatelessWidget {
 }
 
 class _EmptyMenuView extends StatelessWidget {
-  const _EmptyMenuView();
+  const _EmptyMenuView({required this.onRetry});
+
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return const KioskBackdrop(
+    return KioskBackdrop(
       child: KioskEmptyState(
-        title: 'Chưa có món sẵn sàng bán',
-        message:
-            'Menu kiosk hiện chưa có sản phẩm khả dụng. Vui lòng quay lại sau hoặc liên hệ nhân viên hỗ trợ.',
+        title: 'Menu hiện chưa có món',
+        message: 'Vui lòng tải lại sau ít phút hoặc liên hệ nhân viên hỗ trợ.',
         icon: Icons.icecream_outlined,
+        actionLabel: 'Tải lại menu',
+        onAction: onRetry,
       ),
     );
   }

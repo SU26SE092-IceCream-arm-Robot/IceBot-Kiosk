@@ -51,7 +51,9 @@ class KioskController extends ChangeNotifier {
   bool get isLoadingMenu => _isLoadingMenu;
   bool get hasMenu => _menu != null;
 
-  List<RuntimeMenuItem> get menuItems => _menu?.items ?? const [];
+  List<RuntimeMenuItem> get menuItems =>
+      _menu?.items.where((item) => item.isOrderable).toList(growable: false) ??
+      const [];
 
   List<CartLine> get cartLines => List.unmodifiable(_cartLines.values);
   bool get isCartEmpty => _cartLines.isEmpty;
@@ -78,6 +80,11 @@ class KioskController extends ChangeNotifier {
 
   Future<void> loadMenu({bool force = false}) async {
     if (!_hasKioskId) {
+      _menuError = const ApiException(
+        type: ApiErrorType.validation,
+        message: 'Kiosk chưa được cấu hình. Vui lòng thiết lập Kiosk ID.',
+      );
+      notifyListeners();
       return;
     }
     if (_isLoadingMenu) {
@@ -92,7 +99,9 @@ class KioskController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _menu = await _menuRepository.getRuntimeMenu(_kioskId);
+      final menu = await _menuRepository.getRuntimeMenu(_kioskId);
+      _menu = menu;
+      _reconcileCartWith(menu);
       _menuError = null;
     } on ApiException catch (error) {
       _menu = null;
@@ -119,16 +128,50 @@ class KioskController extends ChangeNotifier {
     return null;
   }
 
-  void addToCart(RuntimeMenuItem item, {int quantity = 1}) {
+  bool addToCart(RuntimeMenuItem item, {int quantity = 1}) {
     if (quantity <= 0) {
+      return false;
+    }
+
+    final currentMenuItem = findMenuItem(item.menuItemId);
+    if (_menu != null && currentMenuItem == null) {
+      return false;
+    }
+
+    final orderableItem = currentMenuItem ?? item;
+    final current = _cartLines[orderableItem.menuItemId];
+    _cartLines[orderableItem.menuItemId] = current == null
+        ? CartLine(item: orderableItem, quantity: quantity)
+        : current.copyWith(quantity: current.quantity + quantity);
+    notifyListeners();
+    return true;
+  }
+
+  void _reconcileCartWith(RuntimeMenuResult menu) {
+    if (_recoverableOrder != null) {
       return;
     }
 
-    final current = _cartLines[item.menuItemId];
-    _cartLines[item.menuItemId] = current == null
-        ? CartLine(item: item, quantity: quantity)
-        : current.copyWith(quantity: current.quantity + quantity);
-    notifyListeners();
+    final currentItems = {
+      for (final item in menu.items.where((item) => item.isOrderable))
+        item.menuItemId: item,
+    };
+
+    _cartLines.removeWhere(
+      (menuItemId, line) => !currentItems.containsKey(menuItemId),
+    );
+    for (final entry in _cartLines.entries.toList(growable: false)) {
+      final refreshedItem = currentItems[entry.key];
+      if (refreshedItem != null) {
+        _cartLines[entry.key] = CartLine(
+          item: refreshedItem,
+          quantity: entry.value.quantity,
+        );
+      }
+    }
+
+    _checkoutIntent = null;
+    _paymentAttemptIdempotencyKey = null;
   }
 
   void increaseQuantity(String menuItemId) {

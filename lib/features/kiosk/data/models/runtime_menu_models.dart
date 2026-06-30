@@ -73,6 +73,15 @@ class RuntimeMenuItem {
   final String? imageUrl;
   final int? recipeVersion;
 
+  bool get isOrderable =>
+      menuId.trim().isNotEmpty &&
+      menuItemId.trim().isNotEmpty &&
+      productId.trim().isNotEmpty &&
+      productVariantId.trim().isNotEmpty &&
+      displayName.trim().isNotEmpty &&
+      currency.trim().isNotEmpty &&
+      finalPrice > 0;
+
   factory RuntimeMenuItem.fromJson(Object? json) {
     final map = _asMap(json);
     return RuntimeMenuItem(

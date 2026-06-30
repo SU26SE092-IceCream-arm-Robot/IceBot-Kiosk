@@ -25,7 +25,11 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
     }
 
     _requestedLoad = true;
-    KioskScope.of(context).loadMenu();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        KioskScope.of(context).loadMenu();
+      }
+    });
   }
 
   @override
@@ -40,9 +44,7 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
       return Scaffold(
         body: KioskBackdrop(
           child: KioskErrorPanel(
-            title: _isUnavailable(menuError)
-                ? 'Kiosk đang tạm ngưng'
-                : 'Không thể tải kiosk',
+            title: _errorTitle(menuError),
             error: menuError,
             actionLabel: 'Thử lại',
             onAction: () => controller.loadMenu(force: true),
@@ -69,9 +71,14 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
     );
   }
 
-  bool _isUnavailable(ApiException error) {
-    return error.type == ApiErrorType.notFound ||
-        error.type == ApiErrorType.conflict;
+  String _errorTitle(ApiException error) {
+    return switch (error.type) {
+      ApiErrorType.notFound => 'Không tìm thấy kiosk',
+      ApiErrorType.conflict => 'Kiosk đang tạm ngưng',
+      ApiErrorType.network || ApiErrorType.timeout => 'Không thể kết nối',
+      ApiErrorType.validation => 'Cấu hình kiosk không hợp lệ',
+      _ => 'Không thể tải menu',
+    };
   }
 }
 

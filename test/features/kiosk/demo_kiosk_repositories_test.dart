@@ -17,6 +17,8 @@ void main() {
       final menu = await menuRepository.getRuntimeMenu(AppConfig.demoKioskId);
       expect(menu.items, hasLength(4));
       expect(menu.containsMachineRuntimeState, isFalse);
+      expect(menu.availabilitySource, 'DemoLocalData');
+      expect(menu.kioskId, AppConfig.demoKioskId);
 
       final item = menu.items.first;
       final order = await orderRepository.createOrder(

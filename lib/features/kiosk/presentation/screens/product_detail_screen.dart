@@ -64,6 +64,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   !layout.useSingleColumn && constraints.maxWidth >= 900;
               final info = _ProductInfo(
                 item: item,
+                containsMachineRuntimeState:
+                    controller.menu?.containsMachineRuntimeState == true,
                 quantity: _quantity,
                 onDecrease: _quantity <= 1
                     ? null
@@ -102,8 +104,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         primaryLabel: 'Thêm vào giỏ hàng',
         primaryIcon: Icons.add_shopping_cart,
         onPrimary: () {
-          controller.addToCart(item, quantity: _quantity);
-          context.go(AppRouter.cart);
+          final added = controller.addToCart(item, quantity: _quantity);
+          if (added) {
+            context.go(AppRouter.cart);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Món này vừa không còn trong menu.'),
+              ),
+            );
+            context.go(AppRouter.menu);
+          }
         },
         secondaryLabel: 'Về menu',
         secondaryIcon: Icons.arrow_back,
@@ -173,12 +184,14 @@ class _ProductImage extends StatelessWidget {
 class _ProductInfo extends StatelessWidget {
   const _ProductInfo({
     required this.item,
+    required this.containsMachineRuntimeState,
     required this.quantity,
     required this.onDecrease,
     required this.onIncrease,
   });
 
   final RuntimeMenuItem item;
+  final bool containsMachineRuntimeState;
   final int quantity;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
@@ -231,6 +244,10 @@ class _ProductInfo extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
+            if (!containsMachineRuntimeState) ...[
+              const _RuntimeAvailabilityNotice(),
+              const SizedBox(height: 16),
+            ],
             _CustomizationNotice(),
             const SizedBox(height: 28),
             Wrap(
@@ -331,9 +348,31 @@ class _CustomizationNotice extends StatelessWidget {
         border: Border.all(color: const Color(0xFFF59E0B)),
       ),
       child: Text(
-        'Món này hiện chưa có tuỳ chọn thêm. Khi backend cung cấp cấu hình hương vị, topping hoặc size, các lựa chọn sẽ hiển thị tại đây.',
+        'Món này hiện chưa có tuỳ chọn thêm.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
           color: const Color(0xFF92400E),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _RuntimeAvailabilityNotice extends StatelessWidget {
+  const _RuntimeAvailabilityNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Tình trạng máy và nguyên liệu sẽ được xác nhận khi tạo đơn.',
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          color: Theme.of(context).colorScheme.onPrimaryContainer,
           fontWeight: FontWeight.w700,
         ),
       ),
