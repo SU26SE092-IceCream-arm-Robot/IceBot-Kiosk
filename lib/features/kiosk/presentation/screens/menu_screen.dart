@@ -43,11 +43,13 @@ class _MenuScreenState extends State<MenuScreen> {
 
     if (controller.menuError != null && !controller.hasMenu) {
       return Scaffold(
-        body: KioskErrorPanel(
-          title: 'Kiosk đang tạm ngưng',
-          error: controller.menuError,
-          actionLabel: 'Thử lại',
-          onAction: () => controller.loadMenu(force: true),
+        body: KioskBackdrop(
+          child: KioskErrorPanel(
+            title: 'Kiosk đang tạm ngưng',
+            error: controller.menuError,
+            actionLabel: 'Thử lại',
+            onAction: () => controller.loadMenu(force: true),
+          ),
         ),
       );
     }
@@ -70,54 +72,83 @@ class _MenuScreenState extends State<MenuScreen> {
         ],
       ),
       body: SafeArea(
-        child: items.isEmpty
-            ? const _EmptyMenuView()
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final layout = KioskLayoutSpec.of(context);
-                  final isWideLandscape = layout.isWideLandscape;
-                  return Padding(
-                    padding: EdgeInsets.all(layout.screenPadding),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _MenuHeader(itemCount: items.length),
-                        SizedBox(height: layout.sectionGap),
-                        Expanded(
-                          child: GridView.builder(
-                            padding: EdgeInsets.only(
-                              bottom: layout.bottomOverlayPadding,
-                            ),
-                            gridDelegate: layout.isPortrait
-                                ? SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: layout.portraitMenuColumns,
-                                    mainAxisSpacing: layout.sectionGap,
-                                    crossAxisSpacing: layout.sectionGap,
-                                    childAspectRatio: layout.isCompact
-                                        ? 0.78
-                                        : 0.72,
+        child: KioskBackdrop(
+          child: items.isEmpty
+              ? const _EmptyMenuView()
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final layout = KioskLayoutSpec.of(context);
+                    final isWideLandscape = layout.isWideLandscape;
+                    return Padding(
+                      padding: EdgeInsets.all(layout.screenPadding),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _MenuHeader(itemCount: items.length),
+                          SizedBox(height: layout.sectionGap),
+                          Expanded(
+                            child: layout.isPortrait && items.length == 1
+                                ? ListView(
+                                    padding: EdgeInsets.only(
+                                      bottom: layout.bottomOverlayPadding,
+                                    ),
+                                    children: [
+                                      Align(
+                                        alignment: Alignment.topCenter,
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxWidth: layout.isCompact
+                                                ? double.infinity
+                                                : 560,
+                                          ),
+                                          child: AspectRatio(
+                                            aspectRatio: layout.isCompact
+                                                ? 0.86
+                                                : 0.78,
+                                            child: _MenuItemCard(
+                                              item: items[0],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   )
-                                : SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent: isWideLandscape
-                                        ? 410
-                                        : 350,
-                                    mainAxisSpacing: 24,
-                                    crossAxisSpacing: 24,
-                                    childAspectRatio: isWideLandscape
-                                        ? 0.76
-                                        : 0.7,
+                                : GridView.builder(
+                                    padding: EdgeInsets.only(
+                                      bottom: layout.bottomOverlayPadding,
+                                    ),
+                                    gridDelegate: layout.isPortrait
+                                        ? SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount:
+                                                layout.portraitMenuColumns,
+                                            mainAxisSpacing: layout.sectionGap,
+                                            crossAxisSpacing: layout.sectionGap,
+                                            childAspectRatio: layout.isCompact
+                                                ? 0.86
+                                                : 0.76,
+                                          )
+                                        : SliverGridDelegateWithMaxCrossAxisExtent(
+                                            maxCrossAxisExtent: isWideLandscape
+                                                ? 410
+                                                : 350,
+                                            mainAxisSpacing: 24,
+                                            crossAxisSpacing: 24,
+                                            childAspectRatio: isWideLandscape
+                                                ? 0.76
+                                                : 0.7,
+                                          ),
+                                    itemCount: items.length,
+                                    itemBuilder: (context, index) {
+                                      return _MenuItemCard(item: items[index]);
+                                    },
                                   ),
-                            itemCount: items.length,
-                            itemBuilder: (context, index) {
-                              return _MenuItemCard(item: items[index]);
-                            },
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
       ),
     );
   }
@@ -132,49 +163,52 @@ class _MenuHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Wrap(
-      spacing: 20,
-      runSpacing: 16,
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 780),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return KioskSectionCard(
+      padding: const EdgeInsets.all(24),
+      child: Wrap(
+        spacing: 20,
+        runSpacing: 16,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Menu hôm nay',
+                  style: Theme.of(context).textTheme.displayMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Chọn món kem bạn muốn mua. IceBot sẽ hướng dẫn từng bước đến khi thanh toán.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ],
+            ),
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              Text(
-                'Menu hôm nay',
-                style: Theme.of(context).textTheme.displayMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Chọn món kem bạn muốn mua. Giá và món bán theo menu đang hoạt động của kiosk.',
-                style: Theme.of(context).textTheme.bodyLarge,
+              if (AppConfig.demoMode)
+                const KioskInfoPill(
+                  icon: Icons.visibility_outlined,
+                  label: 'Chế độ demo',
+                  backgroundColor: Color(0xFFFFF7ED),
+                  foregroundColor: Color(0xFF92400E),
+                ),
+              KioskInfoPill(
+                icon: Icons.icecream_outlined,
+                label: '$itemCount món đang bán',
+                backgroundColor: colorScheme.primaryContainer,
+                foregroundColor: colorScheme.onPrimaryContainer,
               ),
             ],
           ),
-        ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            if (AppConfig.demoMode)
-              const KioskInfoPill(
-                icon: Icons.visibility_outlined,
-                label: 'Chế độ demo',
-                backgroundColor: Color(0xFFFFF7ED),
-                foregroundColor: Color(0xFF92400E),
-              ),
-            KioskInfoPill(
-              icon: Icons.icecream_outlined,
-              label: '$itemCount món',
-              backgroundColor: colorScheme.primaryContainer,
-              foregroundColor: colorScheme.onPrimaryContainer,
-            ),
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -185,10 +219,12 @@ class _MenuLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: KioskLoadingPanel(
-        title: 'IceBot Kiosk',
-        message: 'Đang tải menu hôm nay cho bạn.',
-        icon: Icons.restaurant_menu_outlined,
+      body: KioskBackdrop(
+        child: KioskLoadingPanel(
+          title: 'IceBot Kiosk',
+          message: 'Đang tải menu hôm nay cho bạn.',
+          icon: Icons.restaurant_menu_outlined,
+        ),
       ),
     );
   }
@@ -199,11 +235,13 @@ class _EmptyMenuView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const KioskEmptyState(
-      title: 'Chưa có món sẵn sàng bán',
-      message:
-          'Menu kiosk hiện chưa có sản phẩm khả dụng. Vui lòng quay lại sau hoặc liên hệ nhân viên hỗ trợ.',
-      icon: Icons.icecream_outlined,
+    return const KioskBackdrop(
+      child: KioskEmptyState(
+        title: 'Chưa có món sẵn sàng bán',
+        message:
+            'Menu kiosk hiện chưa có sản phẩm khả dụng. Vui lòng quay lại sau hoặc liên hệ nhân viên hỗ trợ.',
+        icon: Icons.icecream_outlined,
+      ),
     );
   }
 }
@@ -217,8 +255,8 @@ class _MenuItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return KioskSectionCard(
+      padding: EdgeInsets.zero,
       child: InkWell(
         onTap: () => context.go(AppRouter.productPath(item.menuItemId)),
         child: Column(
@@ -250,8 +288,8 @@ class _MenuItemCard extends StatelessWidget {
                           ),
                         ),
                   Positioned(
-                    left: 16,
-                    bottom: 16,
+                    left: 18,
+                    bottom: 18,
                     child: KioskInfoPill(
                       label: KioskFormatters.money(
                         item.finalPrice,
@@ -265,7 +303,7 @@ class _MenuItemCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -285,13 +323,21 @@ class _MenuItemCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 14),
-                  KioskInfoPill(
-                    icon: Icons.timer_outlined,
-                    label: KioskFormatters.durationSeconds(
-                      item.preparationTimeSeconds,
-                    ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      KioskInfoPill(
+                        icon: Icons.timer_outlined,
+                        label: KioskFormatters.durationSeconds(
+                          item.preparationTimeSeconds,
+                        ),
+                        backgroundColor: const Color(0xFFFFF7ED),
+                        foregroundColor: const Color(0xFF8A5200),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(

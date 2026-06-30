@@ -56,48 +56,63 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final layout = KioskLayoutSpec.of(context);
-            final useWideLayout =
-                !layout.useSingleColumn && constraints.maxWidth >= 900;
-            final info = _ProductInfo(
-              item: item,
-              quantity: _quantity,
-              onDecrease: _quantity <= 1
-                  ? null
-                  : () => setState(() => _quantity -= 1),
-              onIncrease: () => setState(() => _quantity += 1),
-              onAdd: () {
-                controller.addToCart(item, quantity: _quantity);
-                context.go(AppRouter.cart);
-              },
-            );
+        child: KioskBackdrop(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final layout = KioskLayoutSpec.of(context);
+              final useWideLayout =
+                  !layout.useSingleColumn && constraints.maxWidth >= 900;
+              final info = _ProductInfo(
+                item: item,
+                quantity: _quantity,
+                onDecrease: _quantity <= 1
+                    ? null
+                    : () => setState(() => _quantity -= 1),
+                onIncrease: () => setState(() => _quantity += 1),
+              );
 
-            return Padding(
-              padding: EdgeInsets.all(layout.screenPadding),
-              child: useWideLayout
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(flex: 5, child: _ProductImage(item: item)),
-                        const SizedBox(width: 32),
-                        Expanded(flex: 5, child: info),
-                      ],
-                    )
-                  : ListView(
-                      children: [
-                        SizedBox(
-                          height: _portraitImageHeight(layout),
-                          child: _ProductImage(item: item),
-                        ),
-                        SizedBox(height: layout.sectionGap),
-                        info,
-                        SizedBox(height: layout.bottomOverlayPadding),
-                      ],
-                    ),
-            );
-          },
+              return Padding(
+                padding: EdgeInsets.all(layout.screenPadding),
+                child: useWideLayout
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 5, child: _ProductImage(item: item)),
+                          const SizedBox(width: 32),
+                          Expanded(flex: 5, child: info),
+                        ],
+                      )
+                    : ListView(
+                        children: [
+                          SizedBox(
+                            height: _portraitImageHeight(layout),
+                            child: _ProductImage(item: item),
+                          ),
+                          SizedBox(height: layout.sectionGap),
+                          info,
+                          SizedBox(height: layout.bottomOverlayPadding),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ),
+      ),
+      bottomNavigationBar: KioskBottomActionBar(
+        primaryLabel: 'Thêm vào giỏ hàng',
+        primaryIcon: Icons.add_shopping_cart,
+        onPrimary: () {
+          controller.addToCart(item, quantity: _quantity);
+          context.go(AppRouter.cart);
+        },
+        secondaryLabel: 'Về menu',
+        secondaryIcon: Icons.arrow_back,
+        onSecondary: () => context.go(AppRouter.menu),
+        leading: Text(
+          'Tạm tính: ${KioskFormatters.money(item.finalPrice * _quantity, currency: item.currency)}',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
       ),
     );
@@ -127,11 +142,16 @@ class _ProductImage extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: item.imageUrl == null || item.imageUrl!.isEmpty
           ? Container(
-              color: colorScheme.primaryContainer,
-              child: Icon(
-                Icons.icecream_outlined,
-                size: 140,
-                color: colorScheme.onPrimaryContainer,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                border: Border.all(color: const Color(0xFFD8E3DF)),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.icecream_outlined,
+                  size: 150,
+                  color: colorScheme.onPrimaryContainer,
+                ),
               ),
             )
           : CachedNetworkImage(
@@ -156,14 +176,12 @@ class _ProductInfo extends StatelessWidget {
     required this.quantity,
     required this.onDecrease,
     required this.onIncrease,
-    required this.onAdd,
   });
 
   final RuntimeMenuItem item;
   final int quantity;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
-  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -260,15 +278,6 @@ class _ProductInfo extends StatelessWidget {
                   icon: const Icon(Icons.add),
                 ),
               ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onAdd,
-                icon: const Icon(Icons.add_shopping_cart),
-                label: const Text('Thêm vào giỏ hàng'),
-              ),
             ),
           ],
         ),

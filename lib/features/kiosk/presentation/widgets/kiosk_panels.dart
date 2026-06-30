@@ -17,10 +17,10 @@ class KioskLayoutSpec {
   bool get isWideLandscape => !isPortrait && width >= 980;
   bool get useSingleColumn => isTallKiosk || !isWideLandscape;
   int get portraitMenuColumns => width < 700 ? 1 : 2;
-  double get screenPadding => isCompact ? 18 : 28;
-  double get sectionGap => isCompact ? 16 : 22;
+  double get screenPadding => isCompact ? 18 : 32;
+  double get sectionGap => isCompact ? 18 : 26;
   double get maxPortraitPanelWidth => isCompact ? double.infinity : 760;
-  double get bottomOverlayPadding => isCompact ? 112 : 96;
+  double get bottomOverlayPadding => isCompact ? 120 : 112;
 
   static KioskLayoutSpec of(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -30,6 +30,26 @@ class KioskLayoutSpec {
       height: size.height,
       isPortrait: isPortrait,
       isTallKiosk: isPortrait && size.height / size.width >= 1.8,
+    );
+  }
+}
+
+class KioskBackdrop extends StatelessWidget {
+  const KioskBackdrop({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF1FAF6), Color(0xFFF8F7F0), Color(0xFFF6F8F4)],
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -46,9 +66,108 @@ class KioskSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD8E3DF)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F3D38),
+            blurRadius: 24,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
       child: Padding(padding: padding, child: child),
     );
+  }
+}
+
+class KioskBottomActionBar extends StatelessWidget {
+  const KioskBottomActionBar({
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.primaryIcon,
+    this.secondaryLabel,
+    this.onSecondary,
+    this.secondaryIcon,
+    this.leading,
+    super.key,
+  });
+
+  final String primaryLabel;
+  final VoidCallback? onPrimary;
+  final IconData primaryIcon;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+  final IconData? secondaryIcon;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final layout = KioskLayoutSpec.of(context);
+
+    return SafeArea(
+      minimum: EdgeInsets.fromLTRB(
+        layout.screenPadding,
+        10,
+        layout.screenPadding,
+        layout.isCompact ? 16 : 24,
+      ),
+      child: KioskSectionCard(
+        padding: EdgeInsets.all(layout.isCompact ? 14 : 16),
+        child: layout.isCompact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: _actions(context),
+              )
+            : Row(
+                children: [
+                  if (leading != null) ...[
+                    Expanded(child: leading!),
+                    const SizedBox(width: 16),
+                  ],
+                  if (secondaryLabel != null && onSecondary != null) ...[
+                    OutlinedButton.icon(
+                      onPressed: onSecondary,
+                      icon: Icon(secondaryIcon ?? Icons.arrow_back),
+                      label: Text(secondaryLabel!),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  SizedBox(
+                    width: 300,
+                    child: FilledButton.icon(
+                      onPressed: onPrimary,
+                      icon: Icon(primaryIcon),
+                      label: Text(primaryLabel),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  List<Widget> _actions(BuildContext context) {
+    return [
+      if (leading != null) ...[leading!, const SizedBox(height: 12)],
+      FilledButton.icon(
+        onPressed: onPrimary,
+        icon: Icon(primaryIcon),
+        label: Text(primaryLabel),
+      ),
+      if (secondaryLabel != null && onSecondary != null) ...[
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: onSecondary,
+          icon: Icon(secondaryIcon ?? Icons.arrow_back),
+          label: Text(secondaryLabel!),
+        ),
+      ],
+    ];
   }
 }
 
@@ -76,8 +195,8 @@ class KioskLoadingPanel extends StatelessWidget {
           padding: EdgeInsets.all(layout.screenPadding),
           child: KioskSectionCard(
             padding: EdgeInsets.symmetric(
-              horizontal: layout.isCompact ? 26 : 44,
-              vertical: layout.isCompact ? 32 : 44,
+              horizontal: layout.isCompact ? 26 : 48,
+              vertical: layout.isCompact ? 34 : 52,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -88,6 +207,7 @@ class KioskLoadingPanel extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xAAD8E3DF)),
                   ),
                   child: Icon(
                     icon,
@@ -163,6 +283,7 @@ class KioskEmptyState extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xAAD8E3DF)),
                   ),
                   child: Icon(
                     icon,
@@ -224,6 +345,7 @@ class KioskInfoPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: foreground.withValues(alpha: 0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

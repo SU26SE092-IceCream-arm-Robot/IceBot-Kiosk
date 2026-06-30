@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
+import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
@@ -39,44 +40,71 @@ class CheckoutScreen extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final layout = KioskLayoutSpec.of(context);
-            final useWideLayout =
-                !layout.useSingleColumn && constraints.maxWidth >= 980;
-            return Padding(
-              padding: EdgeInsets.all(layout.screenPadding),
-              child: useWideLayout
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 7,
-                          child: _CheckoutItems(lines: controller.cartLines),
-                        ),
-                        const SizedBox(width: 28),
-                        Expanded(
-                          flex: 4,
-                          child: _CheckoutAction(controller: controller),
-                        ),
-                      ],
-                    )
-                  : ListView(
-                      children: [
-                        SizedBox(
-                          height: _checkoutItemsHeight(
-                            controller.cartLines.length,
-                            layout,
+        child: KioskBackdrop(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final layout = KioskLayoutSpec.of(context);
+              final useWideLayout =
+                  !layout.useSingleColumn && constraints.maxWidth >= 980;
+              return Padding(
+                padding: EdgeInsets.all(layout.screenPadding),
+                child: useWideLayout
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            flex: 7,
+                            child: _CheckoutItems(lines: controller.cartLines),
                           ),
-                          child: _CheckoutItems(lines: controller.cartLines),
-                        ),
-                        SizedBox(height: layout.sectionGap),
-                        _CheckoutAction(controller: controller),
-                        SizedBox(height: layout.bottomOverlayPadding),
-                      ],
-                    ),
-            );
-          },
+                          const SizedBox(width: 28),
+                          Expanded(
+                            flex: 4,
+                            child: _CheckoutAction(controller: controller),
+                          ),
+                        ],
+                      )
+                    : ListView(
+                        children: [
+                          SizedBox(
+                            height: _checkoutItemsHeight(
+                              controller.cartLines.length,
+                              layout,
+                            ),
+                            child: _CheckoutItems(lines: controller.cartLines),
+                          ),
+                          SizedBox(height: layout.sectionGap),
+                          _CheckoutAction(controller: controller),
+                          SizedBox(height: layout.bottomOverlayPadding),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ),
+      ),
+      bottomNavigationBar: KioskBottomActionBar(
+        primaryLabel: controller.isCheckingOut
+            ? 'Đang tạo mã...'
+            : 'Tạo mã thanh toán',
+        primaryIcon: Icons.qr_code_2_outlined,
+        onPrimary: controller.isCheckingOut
+            ? null
+            : () async {
+                final result = await controller.checkout();
+                if (context.mounted && result != null) {
+                  context.go(AppRouter.paymentPath(result.order.id));
+                }
+              },
+        secondaryLabel: 'Về giỏ hàng',
+        secondaryIcon: Icons.arrow_back,
+        onSecondary: controller.isCheckingOut
+            ? null
+            : () => context.go(AppRouter.cart),
+        leading: Text(
+          'Cần thanh toán: ${KioskFormatters.money(controller.cartTotal)}',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
       ),
     );
@@ -190,7 +218,7 @@ class _CheckoutAction extends StatelessWidget {
           ),
           if (controller.checkoutError != null) ...[
             const SizedBox(height: 20),
-            _CheckoutErrorMessage(message: controller.checkoutError!.message),
+            _CheckoutErrorMessage(error: controller.checkoutError!),
           ],
           const SizedBox(height: 28),
           FilledButton.icon(
@@ -259,9 +287,9 @@ class _PaymentInstructionBanner extends StatelessWidget {
 }
 
 class _CheckoutErrorMessage extends StatelessWidget {
-  const _CheckoutErrorMessage({required this.message});
+  const _CheckoutErrorMessage({required this.error});
 
-  final String message;
+  final ApiException error;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +309,7 @@ class _CheckoutErrorMessage extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              message,
+              _friendlyMessage(error),
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onErrorContainer,
                 fontWeight: FontWeight.w700,
@@ -291,5 +319,13 @@ class _CheckoutErrorMessage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _friendlyMessage(ApiException error) {
+    if (error.type == ApiErrorType.upstream) {
+      return 'Chưa thể tạo mã thanh toán. Vui lòng thử lại hoặc nhờ nhân viên hỗ trợ. Chi tiết: ${error.message}';
+    }
+
+    return error.message;
   }
 }

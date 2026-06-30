@@ -23,58 +23,76 @@ class CartScreen extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: controller.isCartEmpty
-            ? const _EmptyCartView()
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final layout = KioskLayoutSpec.of(context);
-                  final useWideLayout =
-                      !layout.useSingleColumn && constraints.maxWidth >= 980;
-                  final list = ListView.separated(
-                    itemCount: controller.cartLines.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      return _CartLineTile(line: controller.cartLines[index]);
-                    },
-                  );
+        child: KioskBackdrop(
+          child: controller.isCartEmpty
+              ? const _EmptyCartView()
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final layout = KioskLayoutSpec.of(context);
+                    final useWideLayout =
+                        !layout.useSingleColumn && constraints.maxWidth >= 980;
+                    final list = ListView.separated(
+                      itemCount: controller.cartLines.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        return _CartLineTile(line: controller.cartLines[index]);
+                      },
+                    );
 
-                  return Padding(
-                    padding: EdgeInsets.all(layout.screenPadding),
-                    child: useWideLayout
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(flex: 7, child: list),
-                              const SizedBox(width: 28),
-                              Expanded(
-                                flex: 3,
-                                child: _CartSummary(controller: controller),
-                              ),
-                            ],
-                          )
-                        : ListView(
-                            children: [
-                              for (
-                                var index = 0;
-                                index < controller.cartLines.length;
-                                index++
-                              ) ...[
-                                _CartLineTile(
-                                  line: controller.cartLines[index],
+                    return Padding(
+                      padding: EdgeInsets.all(layout.screenPadding),
+                      child: useWideLayout
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(flex: 7, child: list),
+                                const SizedBox(width: 28),
+                                Expanded(
+                                  flex: 3,
+                                  child: _CartSummary(controller: controller),
                                 ),
-                                if (index != controller.cartLines.length - 1)
-                                  const SizedBox(height: 16),
                               ],
-                              SizedBox(height: layout.sectionGap),
-                              _CartSummary(controller: controller),
-                              SizedBox(height: layout.bottomOverlayPadding),
-                            ],
-                          ),
-                  );
-                },
-              ),
+                            )
+                          : ListView(
+                              children: [
+                                for (
+                                  var index = 0;
+                                  index < controller.cartLines.length;
+                                  index++
+                                ) ...[
+                                  _CartLineTile(
+                                    line: controller.cartLines[index],
+                                  ),
+                                  if (index != controller.cartLines.length - 1)
+                                    const SizedBox(height: 16),
+                                ],
+                                SizedBox(height: layout.sectionGap),
+                                _CartSummary(controller: controller),
+                                SizedBox(height: layout.bottomOverlayPadding),
+                              ],
+                            ),
+                    );
+                  },
+                ),
+        ),
       ),
+      bottomNavigationBar: controller.isCartEmpty
+          ? null
+          : KioskBottomActionBar(
+              primaryLabel: 'Tiếp tục thanh toán',
+              primaryIcon: Icons.receipt_long_outlined,
+              onPrimary: () => context.go(AppRouter.checkout),
+              secondaryLabel: 'Chọn thêm món',
+              secondaryIcon: Icons.add_circle_outline,
+              onSecondary: () => context.go(AppRouter.menu),
+              leading: Text(
+                'Tổng cộng: ${KioskFormatters.money(controller.cartTotal)}',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ),
     );
   }
 }
@@ -296,7 +314,7 @@ class _CartSummary extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           const Divider(),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: () => context.go(AppRouter.checkout),
             icon: const Icon(Icons.receipt_long_outlined),
@@ -314,6 +332,7 @@ class _CartSummary extends StatelessWidget {
             icon: const Icon(Icons.delete_outline),
             label: const Text('Xóa giỏ hàng'),
           ),
+          const SizedBox(height: 86),
         ],
       ),
     );

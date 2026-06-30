@@ -38,13 +38,15 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
     final menuError = controller.menuError;
     if (menuError != null) {
       return Scaffold(
-        body: KioskErrorPanel(
-          title: _isUnavailable(menuError)
-              ? 'Kiosk đang tạm ngưng'
-              : 'Không thể tải kiosk',
-          error: menuError,
-          actionLabel: 'Thử lại',
-          onAction: () => controller.loadMenu(force: true),
+        body: KioskBackdrop(
+          child: KioskErrorPanel(
+            title: _isUnavailable(menuError)
+                ? 'Kiosk đang tạm ngưng'
+                : 'Không thể tải kiosk',
+            error: menuError,
+            actionLabel: 'Thử lại',
+            onAction: () => controller.loadMenu(force: true),
+          ),
         ),
       );
     }
@@ -58,10 +60,11 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
     }
 
     return const Scaffold(
-      body: KioskLoadingPanel(
-        title: 'IceBot Kiosk',
-        message:
-            'Đang tải menu hôm nay cho kiosk. Vui lòng chờ trong giây lát.',
+      body: KioskBackdrop(
+        child: KioskLoadingPanel(
+          title: 'IceBot Kiosk',
+          message: 'Đang chuẩn bị menu hôm nay. Vui lòng chờ trong giây lát.',
+        ),
       ),
     );
   }
@@ -80,11 +83,13 @@ class _MissingKioskConfigView extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: KioskEmptyState(
-        title: 'Chưa cấu hình kiosk',
-        message:
-            'Tablet cần mã kiosk hợp lệ để tải đúng menu và nhận đơn hàng.',
-        icon: Icons.settings_outlined,
+      body: const KioskBackdrop(
+        child: KioskEmptyState(
+          title: 'Chưa cấu hình kiosk',
+          message:
+              'Tablet cần mã kiosk hợp lệ để tải đúng menu và nhận đơn hàng.',
+          icon: Icons.settings_outlined,
+        ),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
