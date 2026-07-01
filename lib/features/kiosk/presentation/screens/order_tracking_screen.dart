@@ -185,6 +185,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     controller.canRetryPayment,
                 isRetryingPayment: controller.isCheckingOut,
                 canRetryTracking: _pollPausedForError || _timedOut,
+                canResetSession: controller.canResetKioskSession,
                 onRetryTracking: _retryPolling,
                 onRetryPayment: () async {
                   final result = await controller.retryPaymentSession();
@@ -197,6 +198,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   final cancelled = await controller.cancelActiveOrder();
                   if (mounted && cancelled == null) {
                     _startPolling();
+                  }
+                },
+                onResetSession: () async {
+                  final reset = await controller.resetKioskSession();
+                  if (context.mounted && reset) {
+                    context.go(AppRouter.menu);
                   }
                 },
               );
@@ -338,9 +345,11 @@ class _OrderActionPanel extends StatelessWidget {
     required this.canRetryPayment,
     required this.isRetryingPayment,
     required this.canRetryTracking,
+    required this.canResetSession,
     required this.onRetryTracking,
     required this.onRetryPayment,
     required this.onCancel,
+    required this.onResetSession,
   });
 
   final OrderResult order;
@@ -349,9 +358,11 @@ class _OrderActionPanel extends StatelessWidget {
   final bool canRetryPayment;
   final bool isRetryingPayment;
   final bool canRetryTracking;
+  final bool canResetSession;
   final VoidCallback onRetryTracking;
   final Future<void> Function() onRetryPayment;
   final Future<void> Function() onCancel;
+  final Future<void> Function() onResetSession;
 
   @override
   Widget build(BuildContext context) {
@@ -407,9 +418,9 @@ class _OrderActionPanel extends StatelessWidget {
               icon: const Icon(Icons.cancel_outlined),
               label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
             )
-          else if (KioskStatusPresenter.isOrderTerminal(order))
+          else if (canResetSession)
             FilledButton.icon(
-              onPressed: () => context.go(AppRouter.menu),
+              onPressed: onResetSession,
               icon: const Icon(Icons.home_outlined),
               label: const Text('Về menu'),
             )

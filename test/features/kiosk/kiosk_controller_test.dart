@@ -450,6 +450,77 @@ void main() {
     orderRepository.complete(_orderResult(status: OrderStatus.preparing));
     expect((await firstPoll)?.status, OrderStatus.preparing);
   });
+
+  test('safe result states can reset kiosk session and recovery', () async {
+    final recoveryStore = _MemoryOrderRecoveryStore(
+      record: _recoveryRecord(OrderStatus.accepted),
+    );
+    final orderRepository = _RestorableOrderRepository(
+      _orderResult(
+        status: OrderStatus.accepted,
+        paymentStatus: PaymentStatus.paid,
+      ),
+    );
+    final controller = KioskController(
+      menuRepository: _CheckoutMenuRepository(),
+      orderRepository: orderRepository,
+      paymentRepository: _FakePaymentRepository(),
+      orderRecoveryStore: recoveryStore,
+      kioskId: 'kiosk-id',
+    );
+
+    expect(await controller.restoreActiveOrder(), isNotNull);
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+    for (final status in [
+      OrderStatus.ready,
+      OrderStatus.completed,
+      OrderStatus.failed,
+      OrderStatus.cancelled,
+      OrderStatus.executionRejected,
+      OrderStatus.refundRequired,
+      OrderStatus.refunded,
+      OrderStatus.compensated,
+    ]) {
+      orderRepository.order = _orderResult(
+        status: status,
+        paymentStatus: PaymentStatus.paid,
+      );
+      await controller.refreshOrder('order-id');
+      expect(controller.canResetKioskSession, isTrue, reason: status.name);
+    }
+
+    expect(await controller.resetKioskSession(), isTrue);
+    expect(controller.activeOrder, isNull);
+    expect(controller.activePaymentSession, isNull);
+    expect(controller.isCartEmpty, isTrue);
+    expect(recoveryStore.clearCalls, 1);
+  });
+
+  test('in-progress state cannot reset or clear recovery', () async {
+    final recoveryStore = _MemoryOrderRecoveryStore(
+      record: _recoveryRecord(OrderStatus.preparing),
+    );
+    final controller = KioskController(
+      menuRepository: _FakeMenuRepository(),
+      orderRepository: _RestorableOrderRepository(
+        _orderResult(
+          status: OrderStatus.preparing,
+          paymentStatus: PaymentStatus.paid,
+        ),
+      ),
+      paymentRepository: _FakePaymentRepository(),
+      orderRecoveryStore: recoveryStore,
+      kioskId: 'kiosk-id',
+    );
+
+    expect(await controller.restoreActiveOrder(), isNotNull);
+
+    expect(controller.canResetKioskSession, isFalse);
+    expect(await controller.resetKioskSession(), isFalse);
+    expect(controller.activeOrder?.status, OrderStatus.preparing);
+    expect(recoveryStore.clearCalls, 0);
+  });
 }
 
 KioskController _menuController(MenuRepository menuRepository) {
@@ -718,7 +789,7 @@ class _RestorableOrderRepository extends OrderRepository {
   _RestorableOrderRepository(this.order)
     : super(DioClient(baseUrl: 'http://localhost'));
 
-  final OrderResult order;
+  OrderResult order;
   int createCalls = 0;
 
   @override

@@ -186,6 +186,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   order,
                   controller.activePaymentStatus,
                 ),
+                canResetSession: controller.canResetKioskSession,
                 isCancelling: controller.isCancellingOrder,
                 onCancel: () async {
                   _stopPolling();
@@ -216,6 +217,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       _startedAt = DateTime.now();
                     });
                     _startPolling();
+                  }
+                },
+                onResetSession: () async {
+                  _stopPolling();
+                  final reset = await controller.resetKioskSession();
+                  if (context.mounted && reset) {
+                    context.go(AppRouter.menu);
                   }
                 },
               );
@@ -276,10 +284,12 @@ class _PaymentSummary extends StatelessWidget {
     required this.canRetryStatus,
     required this.isRetryingPayment,
     required this.canCancel,
+    required this.canResetSession,
     required this.isCancelling,
     required this.onCancel,
     required this.onRetryStatus,
     required this.onRetryPayment,
+    required this.onResetSession,
   });
 
   final OrderResult order;
@@ -292,10 +302,12 @@ class _PaymentSummary extends StatelessWidget {
   final bool canRetryStatus;
   final bool isRetryingPayment;
   final bool canCancel;
+  final bool canResetSession;
   final bool isCancelling;
   final Future<void> Function() onCancel;
   final Future<void> Function() onRetryStatus;
   final Future<void> Function() onRetryPayment;
+  final Future<void> Function() onResetSession;
 
   @override
   Widget build(BuildContext context) {
@@ -390,11 +402,11 @@ class _PaymentSummary extends StatelessWidget {
               icon: const Icon(Icons.cancel_outlined),
               label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
             )
-          else
+          else if (canResetSession)
             OutlinedButton.icon(
-              onPressed: () => context.go(AppRouter.menu),
+              onPressed: onResetSession,
               icon: const Icon(Icons.home_outlined),
-              label: const Text('Tạo đơn mới'),
+              label: const Text('Về menu'),
             ),
         ],
       ),

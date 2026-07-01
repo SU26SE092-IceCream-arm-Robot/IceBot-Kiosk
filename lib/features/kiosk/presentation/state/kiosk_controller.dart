@@ -82,6 +82,17 @@ class KioskController extends ChangeNotifier {
   bool get isRefreshingOrder => _isRefreshingOrder;
   bool get isRestoringOrder => _isRestoringOrder;
   bool get isCancellingOrder => _isCancellingOrder;
+  bool get canResetKioskSession {
+    final order = _activeOrder;
+    return order != null &&
+        !_isCheckingOut &&
+        !_isCancellingOrder &&
+        !_isRefreshingPaymentStatus &&
+        !_isRefreshingOrder &&
+        !_isRestoringOrder &&
+        _isSafeSessionResetStatus(order.status);
+  }
+
   bool get canRetryPayment {
     final order = _recoverableOrder ?? _activeOrder;
     if (order == null) {
@@ -796,6 +807,36 @@ class KioskController extends ChangeNotifier {
     }
   }
 
+  Future<bool> resetKioskSession() async {
+    if (!canResetKioskSession) {
+      return false;
+    }
+
+    try {
+      await _orderRecoveryStore.clear();
+    } on Object {
+      _trackingError = const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Không thể kết thúc phiên kiosk an toàn. Vui lòng thử lại.',
+      );
+      notifyListeners();
+      return false;
+    }
+
+    _cartLines.clear();
+    _checkoutIntent = null;
+    _recoverableOrder = null;
+    _paymentAttemptIdempotencyKey = null;
+    _activeOrder = null;
+    _activePaymentSession = null;
+    _activePaymentStatus = null;
+    _checkoutError = null;
+    _trackingError = null;
+    _recoveryError = null;
+    notifyListeners();
+    return true;
+  }
+
   Future<void> _persistOrderRecovery(
     OrderResult order, {
     DateTime? paymentExpiresAt,
@@ -825,6 +866,20 @@ class KioskController extends ChangeNotifier {
         order.status == OrderStatus.refundRequired ||
         order.status == OrderStatus.refunded ||
         order.status == OrderStatus.compensated;
+  }
+
+  bool _isSafeSessionResetStatus(OrderStatus status) {
+    return switch (status) {
+      OrderStatus.ready ||
+      OrderStatus.completed ||
+      OrderStatus.cancelled ||
+      OrderStatus.failed ||
+      OrderStatus.executionRejected ||
+      OrderStatus.refundRequired ||
+      OrderStatus.refunded ||
+      OrderStatus.compensated => true,
+      _ => false,
+    };
   }
 }
 
