@@ -40,6 +40,22 @@ class PaymentSessionResult {
   final PaymentTransactionStatus status;
   final DateTime? expiresAt;
 
+  bool get hasQrCodePayload => qrCodePayload?.trim().isNotEmpty == true;
+
+  bool get hasUsableCheckoutUrl {
+    final uri = Uri.tryParse(checkoutUrl?.trim() ?? '');
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.isNotEmpty;
+  }
+
+  bool get hasPaymentAccess => hasQrCodePayload || hasUsableCheckoutUrl;
+
+  bool isExpiredAt(DateTime now) {
+    final expiry = expiresAt;
+    return expiry != null && !now.isBefore(expiry);
+  }
+
   factory PaymentSessionResult.fromJson(Object? json) {
     final map = _asMap(json);
     return PaymentSessionResult(

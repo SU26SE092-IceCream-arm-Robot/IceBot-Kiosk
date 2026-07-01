@@ -40,6 +40,7 @@ class KioskController extends ChangeNotifier {
   PaymentSessionResult? _activePaymentSession;
   PaymentStatusResult? _activePaymentStatus;
   ApiException? _trackingError;
+  bool _isRefreshingPaymentStatus = false;
   bool _isCancellingOrder = false;
   _CheckoutIntent? _checkoutIntent;
   OrderResult? _recoverableOrder;
@@ -68,6 +69,7 @@ class KioskController extends ChangeNotifier {
   PaymentSessionResult? get activePaymentSession => _activePaymentSession;
   PaymentStatusResult? get activePaymentStatus => _activePaymentStatus;
   ApiException? get trackingError => _trackingError;
+  bool get isRefreshingPaymentStatus => _isRefreshingPaymentStatus;
   bool get isCancellingOrder => _isCancellingOrder;
   bool get canRetryPayment {
     final order = _recoverableOrder ?? _activeOrder;
@@ -498,6 +500,7 @@ class KioskController extends ChangeNotifier {
         idempotencyKey: paymentKey,
         description: 'IceBot ${order.orderNumber}',
       );
+      _validatePaymentSession(paymentSession, order);
 
       _activeOrder = order;
       _activePaymentSession = paymentSession;
@@ -560,8 +563,14 @@ class KioskController extends ChangeNotifier {
   }
 
   Future<PaymentStatusResult?> refreshPaymentStatus(String orderId) async {
+    if (_isRefreshingPaymentStatus) {
+      return null;
+    }
+
+    _isRefreshingPaymentStatus = true;
     try {
       final status = await _orderRepository.getPaymentStatus(orderId);
+      _validatePaymentStatus(status, orderId);
       _activePaymentStatus = status;
       _trackingError = null;
       notifyListeners();
@@ -577,6 +586,76 @@ class KioskController extends ChangeNotifier {
       );
       notifyListeners();
       return null;
+    } finally {
+      _isRefreshingPaymentStatus = false;
+    }
+  }
+
+  void _validatePaymentSession(
+    PaymentSessionResult session,
+    OrderResult order,
+  ) {
+    if (session.orderId.isEmpty || session.orderId != order.id) {
+      throw const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Phiên thanh toán không khớp với đơn hàng.',
+      );
+    }
+    if (session.paymentTransactionId.isEmpty ||
+        session.transactionNumber.isEmpty ||
+        session.provider.isEmpty) {
+      throw const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Thông tin phiên thanh toán chưa đầy đủ.',
+      );
+    }
+    if (session.amount <= 0 ||
+        (session.amount - order.totalAmount).abs() > 0.01 ||
+        session.currency.trim().toUpperCase() !=
+            order.currency.trim().toUpperCase()) {
+      throw const ApiException(
+        type: ApiErrorType.conflict,
+        message: 'Số tiền thanh toán không khớp với đơn hàng.',
+      );
+    }
+    if (!session.hasPaymentAccess) {
+      throw const ApiException(
+        type: ApiErrorType.upstream,
+        message:
+            'Chưa nhận được mã QR hoặc trang thanh toán. Vui lòng thử lại.',
+      );
+    }
+    if (session.isExpiredAt(DateTime.now())) {
+      throw const ApiException(
+        type: ApiErrorType.conflict,
+        message: 'Phiên thanh toán đã hết hạn. Vui lòng tạo lại mã.',
+      );
+    }
+    if (session.status == PaymentTransactionStatus.failed ||
+        session.status == PaymentTransactionStatus.cancelled ||
+        session.status == PaymentTransactionStatus.refunded ||
+        session.status == PaymentTransactionStatus.expired ||
+        session.status == PaymentTransactionStatus.unknown) {
+      throw const ApiException(
+        type: ApiErrorType.conflict,
+        message: 'Phiên thanh toán không còn khả dụng.',
+      );
+    }
+  }
+
+  void _validatePaymentStatus(PaymentStatusResult status, String orderId) {
+    if (status.orderId.isEmpty || status.orderId != orderId) {
+      throw const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Trạng thái thanh toán không khớp với đơn hàng.',
+      );
+    }
+    if (status.paymentTransactionId.isEmpty ||
+        status.paymentTransactionStatus == PaymentTransactionStatus.unknown) {
+      throw const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Trạng thái thanh toán từ máy chủ không hợp lệ.',
+      );
     }
   }
 

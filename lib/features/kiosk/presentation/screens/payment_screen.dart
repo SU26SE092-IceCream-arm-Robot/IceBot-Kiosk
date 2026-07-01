@@ -30,6 +30,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   DateTime? _startedAt;
   bool _startedPolling = false;
   bool _timedOut = false;
+  bool _expired = false;
+  bool _pollPausedForError = false;
   bool _pollInFlight = false;
 
   @override
@@ -58,13 +60,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final controller = KioskScope.of(context);
     final session = controller.activePaymentSession;
     final now = DateTime.now();
-    final expiredBySession =
-        session?.expiresAt != null && now.isAfter(session!.expiresAt!);
+    final expiredBySession = session?.isExpiredAt(now) == true;
     final expiredByTimeout =
         _startedAt != null && now.difference(_startedAt!) > _pollTimeout;
 
     if (expiredBySession || expiredByTimeout) {
-      setState(() => _timedOut = true);
+      setState(() {
+        _expired = expiredBySession;
+        _timedOut = !expiredBySession;
+      });
       _stopPolling();
       return;
     }
@@ -72,8 +76,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _pollInFlight = true;
     try {
       final status = await controller.refreshPaymentStatus(widget.orderId);
-      if (!mounted || status == null) {
+      if (!mounted) {
         return;
+      }
+      if (status == null) {
+        if (controller.trackingError != null) {
+          setState(() => _pollPausedForError = true);
+          _stopPolling();
+        }
+        return;
+      }
+
+      if (_pollPausedForError) {
+        setState(() => _pollPausedForError = false);
       }
 
       if (KioskStatusPresenter.isPaymentPaid(status)) {
@@ -85,7 +100,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         return;
       }
 
-      if (KioskStatusPresenter.isPaymentTerminal(status)) {
+      if (!KioskStatusPresenter.shouldPollPayment(status)) {
         _stopPolling();
       }
     } finally {
@@ -95,8 +110,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _startPolling() {
     _stopPolling();
-    _pollNow();
+    _pollPausedForError = false;
     _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
+    _pollNow();
   }
 
   void _stopPolling() {
@@ -132,7 +148,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       warning: const Color(0xFFB45309),
       danger: colors.error,
       timedOut: _timedOut,
+      expired: _expired,
     );
+    final paymentStatus = controller.activePaymentStatus;
 
     return Scaffold(
       appBar: AppBar(
@@ -151,11 +169,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 session: session,
                 statusView: statusView,
                 isPolling: _timer != null,
+                remainingTime: _remainingTime(session.expiresAt),
                 errorMessage:
                     controller.checkoutError?.message ??
                     controller.trackingError?.message,
-                canRetryPayment:
-                    controller.canRetryPayment && (_timedOut || _timer == null),
+                canRetryPayment: KioskStatusPresenter.canRetryPaymentSession(
+                  order,
+                  paymentStatus,
+                  expired: _expired,
+                  timedOut: _timedOut,
+                  hasTrackingError: controller.trackingError != null,
+                ),
+                canRetryStatus: _pollPausedForError,
                 isRetryingPayment: controller.isCheckingOut,
                 canCancel: KioskStatusPresenter.canCancelBeforePaid(
                   order,
@@ -170,6 +195,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     _startPolling();
                   }
                 },
+                onRetryStatus: () async {
+                  setState(() {
+                    _pollPausedForError = false;
+                    _startedAt = DateTime.now();
+                  });
+                  _startPolling();
+                },
                 onRetryPayment: () async {
                   _stopPolling();
                   final result = await controller.retryPaymentSession();
@@ -179,6 +211,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   if (result != null) {
                     setState(() {
                       _timedOut = false;
+                      _expired = false;
+                      _pollPausedForError = false;
                       _startedAt = DateTime.now();
                     });
                     _startPolling();
@@ -213,6 +247,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ),
     );
   }
+
+  String? _remainingTime(DateTime? expiresAt) {
+    if (expiresAt == null || _expired) {
+      return null;
+    }
+
+    final remaining = expiresAt.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      return 'Đã hết hạn';
+    }
+
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds.remainder(60);
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
 }
 
 class _PaymentSummary extends StatelessWidget {
@@ -221,12 +270,15 @@ class _PaymentSummary extends StatelessWidget {
     required this.session,
     required this.statusView,
     required this.isPolling,
+    required this.remainingTime,
     required this.errorMessage,
     required this.canRetryPayment,
+    required this.canRetryStatus,
     required this.isRetryingPayment,
     required this.canCancel,
     required this.isCancelling,
     required this.onCancel,
+    required this.onRetryStatus,
     required this.onRetryPayment,
   });
 
@@ -234,12 +286,15 @@ class _PaymentSummary extends StatelessWidget {
   final PaymentSessionResult session;
   final KioskStatusViewData statusView;
   final bool isPolling;
+  final String? remainingTime;
   final String? errorMessage;
   final bool canRetryPayment;
+  final bool canRetryStatus;
   final bool isRetryingPayment;
   final bool canCancel;
   final bool isCancelling;
   final Future<void> Function() onCancel;
+  final Future<void> Function() onRetryStatus;
   final Future<void> Function() onRetryPayment;
 
   @override
@@ -288,6 +343,8 @@ class _PaymentSummary extends StatelessWidget {
             label: 'Hết hạn',
             value: KioskFormatters.shortDateTime(session.expiresAt),
           ),
+          if (remainingTime != null)
+            _InfoRow(label: 'Thời gian còn lại', value: remainingTime!),
           if (AppConfig.demoMode) ...[
             const SizedBox(height: 4),
             const _DemoPaymentSummaryNotice(),
@@ -301,6 +358,14 @@ class _PaymentSummary extends StatelessWidget {
             _InlineWarning(message: errorMessage!),
           ],
           const SizedBox(height: 28),
+          if (canRetryStatus) ...[
+            FilledButton.icon(
+              onPressed: onRetryStatus,
+              icon: const Icon(Icons.sync),
+              label: const Text('Kiểm tra lại thanh toán'),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (canRetryPayment) ...[
             FilledButton.icon(
               onPressed: isRetryingPayment ? null : onRetryPayment,
@@ -394,7 +459,9 @@ class _QrPayloadPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final payload = session.qrCodePayload?.trim();
-    final checkoutUrl = session.checkoutUrl?.trim();
+    final checkoutUrl = session.hasUsableCheckoutUrl
+        ? session.checkoutUrl!.trim()
+        : null;
     final layout = KioskLayoutSpec.of(context);
 
     return KioskSectionCard(

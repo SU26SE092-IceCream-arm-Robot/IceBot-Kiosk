@@ -63,13 +63,162 @@ void main() {
       status: OrderStatus.paid,
       paymentStatus: PaymentStatus.paid,
     );
+    final preparingOrder = _order(
+      status: OrderStatus.preparing,
+      paymentStatus: PaymentStatus.paid,
+    );
 
     expect(
       KioskStatusPresenter.canCancelBeforePaid(pendingOrder, null),
       isTrue,
     );
     expect(KioskStatusPresenter.canCancelBeforePaid(paidOrder, null), isFalse);
+    expect(
+      KioskStatusPresenter.canCancelBeforePaid(preparingOrder, null),
+      isFalse,
+    );
   });
+
+  test('failed cancelled and expired payments use terminal customer copy', () {
+    expect(
+      _presentPayment(PaymentTransactionStatus.failed).title,
+      'Thanh toán thất bại',
+    );
+    expect(
+      _presentPayment(PaymentTransactionStatus.cancelled).title,
+      'Thanh toán đã hủy',
+    );
+    expect(
+      _presentPayment(PaymentTransactionStatus.expired).title,
+      'Mã thanh toán đã hết hạn',
+    );
+  });
+
+  test('refund-required payment directs customer to staff support', () {
+    final status = _paymentStatus(
+      transactionStatus: PaymentTransactionStatus.paid,
+      orderPaymentStatus: PaymentStatus.paid,
+      orderStatus: OrderStatus.refundRequired,
+      requiresStaffSupport: true,
+    );
+
+    final view = KioskStatusPresenter.payment(
+      status,
+      order: _order(status: OrderStatus.refundRequired),
+      primary: Colors.teal,
+      success: Colors.green,
+      warning: Colors.orange,
+      danger: Colors.red,
+      timedOut: false,
+    );
+
+    expect(view.title, 'Cần nhân viên hỗ trợ');
+    expect(KioskStatusPresenter.isPaymentTerminal(status), isTrue);
+  });
+
+  test('canRetryPayment controls payment-session retry visibility', () {
+    final order = _order(status: OrderStatus.pendingPayment);
+    final retryable = _paymentStatus(
+      transactionStatus: PaymentTransactionStatus.expired,
+      orderPaymentStatus: PaymentStatus.unpaid,
+      orderStatus: OrderStatus.pendingPayment,
+      canRetryPayment: true,
+    );
+    final blocked = _paymentStatus(
+      transactionStatus: PaymentTransactionStatus.expired,
+      orderPaymentStatus: PaymentStatus.unpaid,
+      orderStatus: OrderStatus.pendingPayment,
+    );
+
+    expect(
+      KioskStatusPresenter.canRetryPaymentSession(
+        order,
+        retryable,
+        expired: true,
+        timedOut: false,
+        hasTrackingError: false,
+      ),
+      isTrue,
+    );
+    expect(
+      KioskStatusPresenter.canRetryPaymentSession(
+        order,
+        blocked,
+        expired: true,
+        timedOut: false,
+        hasTrackingError: false,
+      ),
+      isFalse,
+    );
+    expect(
+      KioskStatusPresenter.canRetryPaymentSession(
+        order,
+        retryable,
+        expired: true,
+        timedOut: false,
+        hasTrackingError: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('paid terminal state stops payment polling', () {
+    final pending = _paymentStatus(
+      transactionStatus: PaymentTransactionStatus.pending,
+      orderPaymentStatus: PaymentStatus.unpaid,
+      orderStatus: OrderStatus.pendingPayment,
+    );
+    final paid = _paymentStatus(
+      transactionStatus: PaymentTransactionStatus.paid,
+      orderPaymentStatus: PaymentStatus.paid,
+      orderStatus: OrderStatus.paid,
+    );
+    final expired = _paymentStatus(
+      transactionStatus: PaymentTransactionStatus.expired,
+      orderPaymentStatus: PaymentStatus.unpaid,
+      orderStatus: OrderStatus.pendingPayment,
+      canRetryPayment: true,
+    );
+
+    expect(KioskStatusPresenter.shouldPollPayment(pending), isTrue);
+    expect(KioskStatusPresenter.shouldPollPayment(paid), isFalse);
+    expect(KioskStatusPresenter.shouldPollPayment(expired), isFalse);
+  });
+
+  test('local session expiry uses an explicit expired state', () {
+    final view = KioskStatusPresenter.payment(
+      null,
+      order: _order(status: OrderStatus.pendingPayment),
+      primary: Colors.teal,
+      success: Colors.green,
+      warning: Colors.orange,
+      danger: Colors.red,
+      timedOut: false,
+      expired: true,
+    );
+
+    expect(view.title, 'Mã thanh toán đã hết hạn');
+  });
+}
+
+KioskStatusViewData _presentPayment(PaymentTransactionStatus status) {
+  return KioskStatusPresenter.payment(
+    _paymentStatus(
+      transactionStatus: status,
+      orderPaymentStatus: status == PaymentTransactionStatus.cancelled
+          ? PaymentStatus.cancelled
+          : status == PaymentTransactionStatus.failed
+          ? PaymentStatus.failed
+          : PaymentStatus.unpaid,
+      orderStatus: OrderStatus.pendingPayment,
+    ),
+    order: _order(status: OrderStatus.pendingPayment),
+    primary: Colors.teal,
+    success: Colors.green,
+    warning: Colors.orange,
+    danger: Colors.red,
+    timedOut: false,
+  );
 }
 
 KioskStatusViewData _present(OrderStatus status) {
@@ -86,6 +235,8 @@ PaymentStatusResult _paymentStatus({
   required PaymentTransactionStatus transactionStatus,
   required PaymentStatus orderPaymentStatus,
   required OrderStatus orderStatus,
+  bool canRetryPayment = false,
+  bool requiresStaffSupport = false,
 }) {
   return PaymentStatusResult(
     paymentTransactionId: 'payment-id',
@@ -98,8 +249,8 @@ PaymentStatusResult _paymentStatus({
     currency: 'VND',
     customerStatus: 'Preparing',
     customerStatusMessage: 'Preparing order.',
-    canRetryPayment: false,
-    requiresStaffSupport: false,
+    canRetryPayment: canRetryPayment,
+    requiresStaffSupport: requiresStaffSupport,
   );
 }
 

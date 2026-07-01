@@ -27,7 +27,35 @@ class KioskStatusPresenter {
     required Color warning,
     required Color danger,
     required bool timedOut,
+    bool expired = false,
   }) {
+    final requiresStaffSupport =
+        status?.requiresStaffSupport == true ||
+        order?.requiresStaffSupport == true ||
+        status?.orderStatus == OrderStatus.refundRequired ||
+        status?.orderStatus == OrderStatus.executionRejected ||
+        order?.status == OrderStatus.refundRequired ||
+        order?.status == OrderStatus.executionRejected;
+    if (requiresStaffSupport) {
+      return KioskStatusViewData(
+        title: 'Cần nhân viên hỗ trợ',
+        message: status?.customerStatusMessage.isNotEmpty == true
+            ? status!.customerStatusMessage
+            : 'Vui lòng liên hệ nhân viên tại kiosk để được hỗ trợ.',
+        icon: Icons.support_agent_outlined,
+        color: warning,
+      );
+    }
+
+    if (expired) {
+      return KioskStatusViewData(
+        title: 'Mã thanh toán đã hết hạn',
+        message: 'Bạn có thể tạo lại mã nếu đơn hàng vẫn cho phép thanh toán.',
+        icon: Icons.hourglass_disabled_outlined,
+        color: warning,
+      );
+    }
+
     if (timedOut) {
       return KioskStatusViewData(
         title: 'Chưa ghi nhận thanh toán',
@@ -66,7 +94,8 @@ class KioskStatusPresenter {
     }
 
     if (transactionStatus == PaymentTransactionStatus.failed ||
-        orderPaymentStatus == PaymentStatus.failed) {
+        orderPaymentStatus == PaymentStatus.failed ||
+        currentOrderStatus == OrderStatus.failed) {
       return KioskStatusViewData(
         title: 'Thanh toán thất bại',
         message: 'Vui lòng thử lại hoặc liên hệ nhân viên hỗ trợ.',
@@ -78,7 +107,7 @@ class KioskStatusPresenter {
     if (transactionStatus == PaymentTransactionStatus.expired) {
       return KioskStatusViewData(
         title: 'Mã thanh toán đã hết hạn',
-        message: 'Vui lòng tạo lại đơn hoặc liên hệ nhân viên hỗ trợ.',
+        message: 'Bạn có thể tạo lại mã nếu đơn hàng vẫn cho phép thanh toán.',
         icon: Icons.hourglass_disabled_outlined,
         color: warning,
       );
@@ -111,12 +140,41 @@ class KioskStatusPresenter {
         status.orderPaymentStatus == PaymentStatus.paid ||
         status.orderPaymentStatus == PaymentStatus.failed ||
         status.orderPaymentStatus == PaymentStatus.cancelled ||
-        status.orderPaymentStatus == PaymentStatus.refunded;
+        status.orderPaymentStatus == PaymentStatus.refunded ||
+        status.requiresStaffSupport ||
+        status.orderStatus == OrderStatus.cancelled ||
+        status.orderStatus == OrderStatus.failed ||
+        status.orderStatus == OrderStatus.executionRejected ||
+        status.orderStatus == OrderStatus.refundRequired ||
+        status.orderStatus == OrderStatus.refunded ||
+        status.orderStatus == OrderStatus.compensated ||
+        status.orderStatus == OrderStatus.completed;
   }
 
   static bool isPaymentPaid(PaymentStatusResult status) {
     return status.paymentTransactionStatus == PaymentTransactionStatus.paid ||
         status.orderPaymentStatus == PaymentStatus.paid;
+  }
+
+  static bool shouldPollPayment(PaymentStatusResult? status) {
+    return status == null || !isPaymentTerminal(status);
+  }
+
+  static bool canRetryPaymentSession(
+    OrderResult order,
+    PaymentStatusResult? status, {
+    required bool expired,
+    required bool timedOut,
+    required bool hasTrackingError,
+  }) {
+    if (hasTrackingError) {
+      return false;
+    }
+
+    final retryAllowed = status?.canRetryPayment ?? order.canRetryPayment;
+    final reachedRetryState =
+        expired || timedOut || (status != null && isPaymentTerminal(status));
+    return retryAllowed && reachedRetryState;
   }
 
   static KioskStatusViewData order(

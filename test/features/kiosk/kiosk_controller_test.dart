@@ -291,6 +291,72 @@ void main() {
       contains('Giỏ hàng đã được cập nhật'),
     );
   });
+
+  test(
+    'missing QR and checkout URL keeps order for payment recovery',
+    () async {
+      final orderRepository = _RecordingOrderRepository();
+      final paymentRepository = _MissingPaymentAccessRepository();
+      final controller = _checkoutController(
+        orderRepository: orderRepository,
+        paymentRepository: paymentRepository,
+      );
+
+      await controller.loadMenu();
+      controller.addToCart(_menuItem());
+      final result = await controller.checkout();
+
+      expect(result, isNull);
+      expect(controller.activeOrder?.id, 'order-id');
+      expect(controller.activePaymentSession, isNull);
+      expect(controller.isCartEmpty, isFalse);
+      expect(controller.checkoutError?.message, contains('mã QR'));
+      expect(orderRepository.createCalls, 1);
+    },
+  );
+
+  test('uncertain payment retry reuses idempotency key and order', () async {
+    final orderRepository = _RecordingOrderRepository();
+    final paymentRepository = _UncertainPaymentRepository();
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: paymentRepository,
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+    expect(await controller.checkout(), isNull);
+
+    final result = await controller.retryPaymentSession();
+
+    expect(result?.order.id, 'order-id');
+    expect(orderRepository.createCalls, 1);
+    expect(paymentRepository.orderIds, ['order-id', 'order-id']);
+    expect(paymentRepository.idempotencyKeys[0], isNotNull);
+    expect(
+      paymentRepository.idempotencyKeys[0],
+      paymentRepository.idempotencyKeys[1],
+    );
+  });
+
+  test('payment status guard prevents overlapping requests', () async {
+    final orderRepository = _BlockingPaymentStatusOrderRepository();
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: _FlakyPaymentRepository(failures: 0),
+    );
+
+    final firstPoll = controller.refreshPaymentStatus('order-id');
+    await orderRepository.started.future;
+    final overlappingPoll = await controller.refreshPaymentStatus('order-id');
+
+    expect(overlappingPoll, isNull);
+    expect(orderRepository.paymentStatusCalls, 1);
+
+    orderRepository.complete(_paymentStatus());
+    expect(await firstPoll, isNotNull);
+    expect(controller.activePaymentStatus?.orderId, 'order-id');
+  });
 }
 
 KioskController _menuController(MenuRepository menuRepository) {
@@ -478,6 +544,83 @@ class _FlakyPaymentRepository extends PaymentRepository {
   }
 }
 
+class _MissingPaymentAccessRepository extends PaymentRepository {
+  _MissingPaymentAccessRepository()
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  @override
+  Future<PaymentSessionResult> createPaymentSession(
+    String orderId, {
+    String? idempotencyKey,
+    String? description,
+  }) async {
+    return PaymentSessionResult(
+      paymentTransactionId: 'payment-id',
+      orderId: orderId,
+      transactionNumber: 'PAY-001',
+      provider: 'PayOS',
+      amount: 35000,
+      currency: 'VND',
+      status: PaymentTransactionStatus.pending,
+    );
+  }
+}
+
+class _UncertainPaymentRepository extends PaymentRepository {
+  _UncertainPaymentRepository() : super(DioClient(baseUrl: 'http://localhost'));
+
+  final List<String> orderIds = [];
+  final List<String?> idempotencyKeys = [];
+
+  @override
+  Future<PaymentSessionResult> createPaymentSession(
+    String orderId, {
+    String? idempotencyKey,
+    String? description,
+  }) async {
+    orderIds.add(orderId);
+    idempotencyKeys.add(idempotencyKey);
+    if (orderIds.length == 1) {
+      throw const ApiException(
+        type: ApiErrorType.network,
+        message: 'Connection interrupted.',
+      );
+    }
+
+    return PaymentSessionResult(
+      paymentTransactionId: 'payment-id',
+      orderId: orderId,
+      transactionNumber: 'PAY-001',
+      provider: 'PayOS',
+      checkoutUrl: 'https://example.test/payment',
+      amount: 35000,
+      currency: 'VND',
+      status: PaymentTransactionStatus.pending,
+    );
+  }
+}
+
+class _BlockingPaymentStatusOrderRepository extends OrderRepository {
+  _BlockingPaymentStatusOrderRepository()
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  int paymentStatusCalls = 0;
+  final Completer<void> started = Completer<void>();
+  final Completer<PaymentStatusResult> _result =
+      Completer<PaymentStatusResult>();
+
+  @override
+  Future<PaymentStatusResult> getPaymentStatus(String orderId) {
+    paymentStatusCalls++;
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return _result.future;
+  }
+
+  void complete(PaymentStatusResult status) => _result.complete(status);
+}
+
 class _NetworkThenSuccessOrderRepository extends OrderRepository {
   _NetworkThenSuccessOrderRepository()
     : super(DioClient(baseUrl: 'http://localhost'));
@@ -517,5 +660,22 @@ OrderResult _orderResult() {
     canRetryPayment: true,
     requiresStaffSupport: false,
     items: const [],
+  );
+}
+
+PaymentStatusResult _paymentStatus() {
+  return PaymentStatusResult(
+    paymentTransactionId: 'payment-id',
+    orderId: 'order-id',
+    provider: 'PayOS',
+    paymentTransactionStatus: PaymentTransactionStatus.pending,
+    orderPaymentStatus: PaymentStatus.unpaid,
+    orderStatus: OrderStatus.pendingPayment,
+    amount: 35000,
+    currency: 'VND',
+    customerStatus: 'WaitingForPayment',
+    customerStatusMessage: 'Waiting for payment.',
+    canRetryPayment: true,
+    requiresStaffSupport: false,
   );
 }
