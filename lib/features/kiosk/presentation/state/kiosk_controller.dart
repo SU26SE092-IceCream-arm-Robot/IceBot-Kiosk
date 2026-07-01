@@ -214,11 +214,32 @@ class KioskController extends ChangeNotifier {
   }
 
   Future<CheckoutResult?> checkout() async {
-    if (_cartLines.isEmpty || _menu == null || !_hasKioskId) {
-      return null;
-    }
     if (_isCheckingOut) {
       return null;
+    }
+    if (!_hasKioskId) {
+      return _rejectCheckout(
+        const ApiException(
+          type: ApiErrorType.validation,
+          message: 'Kiosk chưa được cấu hình nên chưa thể tạo đơn.',
+        ),
+      );
+    }
+    if (_menu == null) {
+      return _rejectCheckout(
+        const ApiException(
+          type: ApiErrorType.validation,
+          message: 'Vui lòng tải menu trước khi tạo đơn hàng.',
+        ),
+      );
+    }
+    if (_cartLines.isEmpty) {
+      return _rejectCheckout(
+        const ApiException(
+          type: ApiErrorType.validation,
+          message: 'Giỏ hàng đang trống. Vui lòng chọn ít nhất một món.',
+        ),
+      );
     }
 
     _isCheckingOut = true;
@@ -229,7 +250,22 @@ class KioskController extends ChangeNotifier {
       final fingerprint = _cartFingerprint;
       var intent = _checkoutIntent;
       if (intent == null || intent.cartFingerprint != fingerprint) {
-        intent = _createCheckoutIntent(fingerprint);
+        if (intent != null && intent.cartFingerprint != fingerprint) {
+          _recoverableOrder = null;
+        }
+        await loadMenu(force: true);
+        if (_menuError != null || _menu == null) {
+          _checkoutError = _menuLoadCheckoutError(_menuError);
+          return null;
+        }
+
+        final cartError = _validateCartAgainstMenu();
+        if (cartError != null) {
+          _checkoutError = cartError;
+          return null;
+        }
+
+        intent = _createCheckoutIntent(_cartFingerprint);
         _checkoutIntent = intent;
         _recoverableOrder = null;
         _paymentAttemptIdempotencyKey = null;
@@ -237,9 +273,22 @@ class KioskController extends ChangeNotifier {
         _activePaymentStatus = null;
       }
 
-      final order =
-          _recoverableOrder ??
-          await _orderRepository.createOrder(intent.orderRequest);
+      final cartError = _validateCartAgainstMenu();
+      if (cartError != null) {
+        _checkoutError = cartError;
+        return null;
+      }
+
+      OrderResult order;
+      try {
+        order =
+            _recoverableOrder ??
+            await _orderRepository.createOrder(intent.orderRequest);
+      } on ApiException catch (error) {
+        await _handleCreateOrderError(error);
+        return null;
+      }
+
       _activeOrder = order;
       _recoverableOrder = order;
       notifyListeners();
@@ -258,6 +307,150 @@ class KioskController extends ChangeNotifier {
       _isCheckingOut = false;
       notifyListeners();
     }
+  }
+
+  CheckoutResult? _rejectCheckout(ApiException error) {
+    _checkoutError = error;
+    notifyListeners();
+    return null;
+  }
+
+  ApiException? _validateCartAgainstMenu() {
+    if (_cartLines.isEmpty) {
+      return const ApiException(
+        type: ApiErrorType.validation,
+        message: 'Giỏ hàng không còn món hợp lệ. Vui lòng chọn lại món.',
+      );
+    }
+
+    final menuById = {for (final item in menuItems) item.menuItemId: item};
+    for (final line in _cartLines.values) {
+      if (line.quantity <= 0) {
+        return const ApiException(
+          type: ApiErrorType.validation,
+          message: 'Số lượng món phải lớn hơn 0.',
+        );
+      }
+
+      final currentItem = menuById[line.item.menuItemId];
+      if (currentItem == null) {
+        return const ApiException(
+          type: ApiErrorType.conflict,
+          statusCode: 409,
+          message: 'Một món trong giỏ không còn thuộc menu hiện tại.',
+        );
+      }
+    }
+
+    final currencies = _cartLines.values
+        .map((line) => line.item.currency.toUpperCase())
+        .toSet();
+    if (currencies.length > 1) {
+      return const ApiException(
+        type: ApiErrorType.validation,
+        message: 'Các món trong đơn phải sử dụng cùng một loại tiền tệ.',
+      );
+    }
+
+    return null;
+  }
+
+  Future<void> _handleCreateOrderError(ApiException error) async {
+    if (_requiresMenuRefresh(error)) {
+      _checkoutIntent = null;
+      _paymentAttemptIdempotencyKey = null;
+      await loadMenu(force: true);
+
+      if (_menuError != null || _menu == null) {
+        _checkoutError = _menuLoadCheckoutError(_menuError);
+        return;
+      }
+
+      _checkoutError = ApiException(
+        type: ApiErrorType.conflict,
+        statusCode: error.statusCode,
+        message: _cartLines.isEmpty
+            ? 'Menu vừa thay đổi và món trong giỏ không còn khả dụng. Vui lòng chọn lại món.'
+            : 'Menu hoặc giá món vừa thay đổi. Giỏ hàng đã được cập nhật, vui lòng kiểm tra lại.',
+        details: error.details,
+        businessError: error.businessError,
+      );
+      return;
+    }
+
+    _checkoutError = _friendlyCreateOrderError(error);
+  }
+
+  bool _requiresMenuRefresh(ApiException error) {
+    if (error.type == ApiErrorType.notFound) {
+      return true;
+    }
+    if (error.type != ApiErrorType.conflict) {
+      return false;
+    }
+    if (error.details?.containsKey('calculatedTotalAmount') == true) {
+      return true;
+    }
+
+    final message = error.message.toLowerCase();
+    return message.contains('client total') ||
+        message.contains('menu item') ||
+        message.contains('menu ') ||
+        message.contains('product') ||
+        message.contains('variant') ||
+        message.contains('recipe') ||
+        message.contains('production route');
+  }
+
+  ApiException _friendlyCreateOrderError(ApiException error) {
+    final message = switch (error.type) {
+      ApiErrorType.validation =>
+        'Thông tin đơn hàng chưa hợp lệ. Vui lòng kiểm tra lại giỏ hàng.',
+      ApiErrorType.notFound =>
+        'Kiosk hoặc món trong giỏ không còn tồn tại. Vui lòng tải lại menu.',
+      ApiErrorType.conflict =>
+        'Kiosk hiện không thể nhận đơn. Vui lòng thử lại sau hoặc liên hệ nhân viên.',
+      ApiErrorType.timeout ||
+      ApiErrorType.network => 'Không thể kết nối để tạo đơn. Vui lòng thử lại.',
+      _ => 'Backend chưa thể tạo đơn hàng. Vui lòng thử lại sau.',
+    };
+
+    return ApiException(
+      type: error.type,
+      statusCode: error.statusCode,
+      message: message,
+      validationErrors: error.validationErrors,
+      details: error.details,
+      businessError: error.businessError,
+    );
+  }
+
+  ApiException _menuLoadCheckoutError(ApiException? error) {
+    if (error == null) {
+      return const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Không thể cập nhật menu trước khi tạo đơn.',
+      );
+    }
+
+    final message = switch (error.type) {
+      ApiErrorType.notFound =>
+        'Không tìm thấy kiosk hoặc menu. Vui lòng liên hệ nhân viên.',
+      ApiErrorType.conflict =>
+        'Kiosk hiện không sẵn sàng nhận đơn. Vui lòng thử lại sau.',
+      ApiErrorType.timeout || ApiErrorType.network =>
+        'Không thể cập nhật menu trước khi tạo đơn. Vui lòng kiểm tra kết nối.',
+      _ => 'Không thể cập nhật menu trước khi tạo đơn.',
+    };
+
+    return ApiException(
+      type: error.type,
+      statusCode: error.statusCode,
+      message: message,
+      validationErrors: error.validationErrors,
+      details: error.details,
+      businessError: error.businessError,
+    );
   }
 
   Future<CheckoutResult?> retryPaymentSession() async {

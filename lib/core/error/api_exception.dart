@@ -17,12 +17,16 @@ class ApiException implements Exception {
     required this.message,
     this.statusCode,
     this.validationErrors,
+    this.details,
+    this.businessError,
   });
 
   final ApiErrorType type;
   final String message;
   final int? statusCode;
   final Map<String, List<String>>? validationErrors;
+  final Map<String, Object?>? details;
+  final String? businessError;
 
   factory ApiException.fromApiResult(ApiResult<Object?> result) {
     return ApiException(
@@ -30,6 +34,8 @@ class ApiException implements Exception {
       statusCode: result.statusCode,
       message: result.message ?? 'Yêu cầu không thành công.',
       validationErrors: result.validationErrors,
+      details: result.details,
+      businessError: result.businessError,
     );
   }
 
@@ -42,6 +48,8 @@ class ApiException implements Exception {
         statusCode: result.statusCode,
         message: result.message ?? _messageForStatusCode(result.statusCode),
         validationErrors: result.validationErrors,
+        details: result.details,
+        businessError: result.businessError,
       );
     }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
@@ -170,6 +172,125 @@ void main() {
       expect(controller.addToCart(staleItem), isFalse);
     },
   );
+
+  test('create order payload matches backend PlaceOrderRequest', () async {
+    final orderRepository = _RecordingOrderRepository();
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: _FlakyPaymentRepository(failures: 0),
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem(), quantity: 2);
+    final result = await controller.checkout();
+
+    expect(result, isNotNull);
+    final json = orderRepository.lastRequest!.toJson();
+    expect(json['kioskId'], 'kiosk-id');
+    expect(json['channel'], 'Tablet');
+    expect(json['runtimeSnapshotId'], 'snapshot-id');
+    expect(json['runtimeSnapshotGeneratedAt'], isNotNull);
+    expect(json['clientTotalAmount'], 70000);
+    expect(json['idempotencyKey'], isNotEmpty);
+    expect(json['clientOrderId'], isNotEmpty);
+    expect(json['items'], [
+      {
+        'menuItemId': 'menu-item-id',
+        'clientLineId': 'line-menu-item-id',
+        'quantity': 2,
+      },
+    ]);
+  });
+
+  test('empty cart cannot create order', () async {
+    final orderRepository = _RecordingOrderRepository();
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: _FlakyPaymentRepository(failures: 0),
+    );
+
+    await controller.loadMenu();
+    final result = await controller.checkout();
+
+    expect(result, isNull);
+    expect(orderRepository.createCalls, 0);
+    expect(controller.checkoutError?.type, ApiErrorType.validation);
+    expect(controller.checkoutError?.message, contains('Giỏ hàng đang trống'));
+  });
+
+  test('double submit creates only one order', () async {
+    final orderRepository = _BlockingOrderRepository();
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: _FlakyPaymentRepository(failures: 0),
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+    final firstSubmit = controller.checkout();
+    await orderRepository.started.future;
+
+    final secondSubmit = await controller.checkout();
+    orderRepository.complete(_orderResult());
+    final firstResult = await firstSubmit;
+
+    expect(secondSubmit, isNull);
+    expect(firstResult, isNotNull);
+    expect(orderRepository.createCalls, 1);
+  });
+
+  test('checkout refresh blocks stale item before create order', () async {
+    final menuRepository = _RuntimeMenuRepository([
+      _runtimeMenu(items: [_menuItem()]),
+      _runtimeMenu(),
+    ]);
+    final orderRepository = _RecordingOrderRepository();
+    final controller = KioskController(
+      menuRepository: menuRepository,
+      orderRepository: orderRepository,
+      paymentRepository: _FlakyPaymentRepository(failures: 0),
+      kioskId: 'kiosk-id',
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+    final result = await controller.checkout();
+
+    expect(result, isNull);
+    expect(orderRepository.createCalls, 0);
+    expect(controller.isCartEmpty, isTrue);
+    expect(controller.checkoutError?.message, contains('không còn món hợp lệ'));
+  });
+
+  test('409 total mismatch refreshes menu and stops before payment', () async {
+    final refreshedItem = _menuItem(price: 40000);
+    final menuRepository = _RuntimeMenuRepository([
+      _runtimeMenu(items: [_menuItem()]),
+      _runtimeMenu(items: [_menuItem()]),
+      _runtimeMenu(items: [refreshedItem]),
+    ]);
+    final orderRepository = _ConflictOrderRepository();
+    final paymentRepository = _FlakyPaymentRepository(failures: 0);
+    final controller = KioskController(
+      menuRepository: menuRepository,
+      orderRepository: orderRepository,
+      paymentRepository: paymentRepository,
+      kioskId: 'kiosk-id',
+    );
+
+    await controller.loadMenu();
+    controller.addToCart(_menuItem());
+    final result = await controller.checkout();
+
+    expect(result, isNull);
+    expect(orderRepository.createCalls, 1);
+    expect(paymentRepository.orderIds, isEmpty);
+    expect(controller.cartTotal, 40000);
+    expect(
+      controller.checkoutError?.message,
+      contains('Giỏ hàng đã được cập nhật'),
+    );
+  });
 }
 
 KioskController _menuController(MenuRepository menuRepository) {
@@ -183,7 +304,7 @@ KioskController _menuController(MenuRepository menuRepository) {
 
 KioskController _checkoutController({
   required OrderRepository orderRepository,
-  required _FlakyPaymentRepository paymentRepository,
+  required PaymentRepository paymentRepository,
 }) {
   return KioskController(
     menuRepository: _CheckoutMenuRepository(),
@@ -193,8 +314,8 @@ KioskController _checkoutController({
   );
 }
 
-RuntimeMenuItem _menuItem() {
-  return const RuntimeMenuItem(
+RuntimeMenuItem _menuItem({double price = 35000}) {
+  return RuntimeMenuItem(
     menuId: 'menu-id',
     menuItemId: 'menu-item-id',
     productId: 'product-id',
@@ -203,9 +324,9 @@ RuntimeMenuItem _menuItem() {
     productCode: 'P-001',
     productVariantCode: 'V-001',
     displayName: 'Kem vani',
-    price: 35000,
+    price: price,
     discountAmount: 0,
-    finalPrice: 35000,
+    finalPrice: price,
     currency: 'VND',
   );
 }
@@ -272,11 +393,49 @@ class _RecordingOrderRepository extends OrderRepository {
   _RecordingOrderRepository() : super(DioClient(baseUrl: 'http://localhost'));
 
   int createCalls = 0;
+  CreateOrderRequest? lastRequest;
 
   @override
   Future<OrderResult> createOrder(CreateOrderRequest request) async {
     createCalls++;
+    lastRequest = request;
     return _orderResult();
+  }
+}
+
+class _BlockingOrderRepository extends OrderRepository {
+  _BlockingOrderRepository() : super(DioClient(baseUrl: 'http://localhost'));
+
+  int createCalls = 0;
+  final Completer<void> started = Completer<void>();
+  final Completer<OrderResult> _result = Completer<OrderResult>();
+
+  @override
+  Future<OrderResult> createOrder(CreateOrderRequest request) {
+    createCalls++;
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return _result.future;
+  }
+
+  void complete(OrderResult order) => _result.complete(order);
+}
+
+class _ConflictOrderRepository extends OrderRepository {
+  _ConflictOrderRepository() : super(DioClient(baseUrl: 'http://localhost'));
+
+  int createCalls = 0;
+
+  @override
+  Future<OrderResult> createOrder(CreateOrderRequest request) async {
+    createCalls++;
+    throw const ApiException(
+      type: ApiErrorType.conflict,
+      statusCode: 409,
+      message: 'Client total does not match calculated total.',
+      details: {'clientTotalAmount': 35000, 'calculatedTotalAmount': 40000},
+    );
   }
 }
 

@@ -15,13 +15,19 @@ class CheckoutScreen extends StatelessWidget {
     final controller = KioskScope.of(context);
 
     if (controller.isCartEmpty) {
+      final checkoutError = controller.checkoutError;
       return Scaffold(
         appBar: AppBar(title: const Text('Xác nhận đơn hàng')),
         body: KioskEmptyState(
-          title: 'Chưa có món để thanh toán',
+          title: checkoutError == null
+              ? 'Chưa có món để thanh toán'
+              : 'Giỏ hàng cần được cập nhật',
           message:
+              checkoutError?.message ??
               'Giỏ hàng đang trống. Vui lòng chọn món trước khi tạo mã thanh toán.',
-          icon: Icons.shopping_cart_outlined,
+          icon: checkoutError == null
+              ? Icons.shopping_cart_outlined
+              : Icons.sync_problem_outlined,
           actionLabel: 'Về menu',
           onAction: () => context.go(AppRouter.menu),
         ),
