@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/cart_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/checkout_screen.dart';
-import 'package:icebot_kiosk/features/kiosk/presentation/screens/kiosk_placeholder_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/kiosk_splash_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/menu_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/order_tracking_screen.dart';
@@ -79,23 +78,11 @@ class AppRouter {
       ),
       GoRoute(
         path: success,
-        builder: (BuildContext context, GoRouterState state) {
-          return const KioskPlaceholderScreen(
-            title: 'Nhận kem thành công',
-            subtitle: 'Màn hình hoàn tất giao dịch cho khách hàng.',
-            routeLabel: '/success',
-          );
-        },
+        redirect: (BuildContext context, GoRouterState state) => menu,
       ),
       GoRoute(
         path: error,
-        builder: (BuildContext context, GoRouterState state) {
-          return const KioskPlaceholderScreen(
-            title: 'Có lỗi xảy ra',
-            subtitle: 'Màn hình lỗi sẽ hướng dẫn khách hủy hoặc gọi nhân viên.',
-            routeLabel: '/error',
-          );
-        },
+        redirect: (BuildContext context, GoRouterState state) => menu,
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

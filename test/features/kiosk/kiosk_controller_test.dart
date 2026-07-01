@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
+import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart';
@@ -357,6 +358,98 @@ void main() {
     expect(await firstPoll, isNotNull);
     expect(controller.activePaymentStatus?.orderId, 'order-id');
   });
+
+  test('restores a non-terminal order from safe local recovery', () async {
+    final recoveryStore = _MemoryOrderRecoveryStore(
+      record: _recoveryRecord(OrderStatus.accepted),
+    );
+    final controller = KioskController(
+      menuRepository: _FakeMenuRepository(),
+      orderRepository: _RestorableOrderRepository(
+        _orderResult(
+          status: OrderStatus.accepted,
+          paymentStatus: PaymentStatus.paid,
+        ),
+      ),
+      paymentRepository: _FakePaymentRepository(),
+      orderRecoveryStore: recoveryStore,
+      kioskId: 'kiosk-id',
+    );
+
+    final restored = await controller.restoreActiveOrder();
+
+    expect(restored?.status, OrderStatus.accepted);
+    expect(controller.activeOrder?.id, 'order-id');
+    expect(controller.recoveryError, isNull);
+    expect(recoveryStore.savedOrders, hasLength(1));
+  });
+
+  test('terminal order returned during recovery is cleared', () async {
+    final recoveryStore = _MemoryOrderRecoveryStore(
+      record: _recoveryRecord(OrderStatus.preparing),
+    );
+    final controller = KioskController(
+      menuRepository: _FakeMenuRepository(),
+      orderRepository: _RestorableOrderRepository(
+        _orderResult(
+          status: OrderStatus.completed,
+          paymentStatus: PaymentStatus.paid,
+        ),
+      ),
+      paymentRepository: _FakePaymentRepository(),
+      orderRecoveryStore: recoveryStore,
+      kioskId: 'kiosk-id',
+    );
+
+    final restored = await controller.restoreActiveOrder();
+
+    expect(restored, isNull);
+    expect(controller.activeOrder, isNull);
+    expect(recoveryStore.clearCalls, 1);
+  });
+
+  test(
+    'restored pending order retries payment without creating an order',
+    () async {
+      final recoveryStore = _MemoryOrderRecoveryStore(
+        record: _recoveryRecord(OrderStatus.pendingPayment),
+      );
+      final paymentRepository = _FlakyPaymentRepository(failures: 0);
+      final orderRepository = _RestorableOrderRepository(_orderResult());
+      final controller = KioskController(
+        menuRepository: _FakeMenuRepository(),
+        orderRepository: orderRepository,
+        paymentRepository: paymentRepository,
+        orderRecoveryStore: recoveryStore,
+        kioskId: 'kiosk-id',
+      );
+
+      expect(await controller.restoreActiveOrder(), isNotNull);
+      final result = await controller.retryPaymentSession();
+
+      expect(result?.order.id, 'order-id');
+      expect(paymentRepository.orderIds, ['order-id']);
+      expect(orderRepository.createCalls, 0);
+    },
+  );
+
+  test('order refresh guard prevents overlapping requests', () async {
+    final orderRepository = _BlockingOrderRefreshRepository();
+    final controller = _checkoutController(
+      orderRepository: orderRepository,
+      paymentRepository: _FlakyPaymentRepository(failures: 0),
+    );
+
+    final firstPoll = controller.refreshOrder('order-id');
+    await orderRepository.started.future;
+    final overlappingPoll = await controller.refreshOrder('order-id');
+
+    expect(overlappingPoll, isNull);
+    expect(orderRepository.getOrderCalls, 1);
+
+    orderRepository.complete(_orderResult(status: OrderStatus.preparing));
+    expect((await firstPoll)?.status, OrderStatus.preparing);
+  });
 }
 
 KioskController _menuController(MenuRepository menuRepository) {
@@ -621,6 +714,65 @@ class _BlockingPaymentStatusOrderRepository extends OrderRepository {
   void complete(PaymentStatusResult status) => _result.complete(status);
 }
 
+class _RestorableOrderRepository extends OrderRepository {
+  _RestorableOrderRepository(this.order)
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  final OrderResult order;
+  int createCalls = 0;
+
+  @override
+  Future<OrderResult> createOrder(CreateOrderRequest request) async {
+    createCalls++;
+    return order;
+  }
+
+  @override
+  Future<OrderResult> getOrder(String orderId) async => order;
+}
+
+class _BlockingOrderRefreshRepository extends OrderRepository {
+  _BlockingOrderRefreshRepository()
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  int getOrderCalls = 0;
+  final Completer<void> started = Completer<void>();
+  final Completer<OrderResult> _result = Completer<OrderResult>();
+
+  @override
+  Future<OrderResult> getOrder(String orderId) {
+    getOrderCalls++;
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return _result.future;
+  }
+
+  void complete(OrderResult order) => _result.complete(order);
+}
+
+class _MemoryOrderRecoveryStore implements OrderRecoveryStore {
+  _MemoryOrderRecoveryStore({this.record});
+
+  OrderRecoveryRecord? record;
+  int clearCalls = 0;
+  final List<OrderResult> savedOrders = [];
+
+  @override
+  Future<void> save(OrderResult order, {DateTime? paymentExpiresAt}) async {
+    savedOrders.add(order);
+  }
+
+  @override
+  Future<OrderRecoveryRecord?> read(String kioskId) async => record;
+
+  @override
+  Future<void> clear() async {
+    clearCalls++;
+    record = null;
+  }
+}
+
 class _NetworkThenSuccessOrderRepository extends OrderRepository {
   _NetworkThenSuccessOrderRepository()
     : super(DioClient(baseUrl: 'http://localhost'));
@@ -640,26 +792,42 @@ class _NetworkThenSuccessOrderRepository extends OrderRepository {
   }
 }
 
-OrderResult _orderResult() {
+OrderResult _orderResult({
+  OrderStatus status = OrderStatus.pendingPayment,
+  PaymentStatus paymentStatus = PaymentStatus.unpaid,
+}) {
   return OrderResult(
     id: 'order-id',
     kioskId: 'kiosk-id',
     orderNumber: 'ORD-001',
     channel: 'Tablet',
-    status: OrderStatus.pendingPayment,
-    paymentStatus: PaymentStatus.unpaid,
+    status: status,
+    paymentStatus: paymentStatus,
     currency: 'VND',
     subtotalAmount: 35000,
     discountAmount: 0,
     taxAmount: 0,
     totalAmount: 35000,
-    paidAmount: 0,
+    paidAmount: paymentStatus == PaymentStatus.paid ? 35000 : 0,
     placedAt: DateTime.utc(2026, 6, 30),
     customerStatus: 'WaitingForPayment',
     customerStatusMessage: 'Waiting for payment.',
-    canRetryPayment: true,
+    canRetryPayment: status == OrderStatus.pendingPayment,
     requiresStaffSupport: false,
     items: const [],
+  );
+}
+
+OrderRecoveryRecord _recoveryRecord(OrderStatus status) {
+  return OrderRecoveryRecord(
+    orderId: 'order-id',
+    kioskId: 'kiosk-id',
+    orderStatus: status,
+    paymentStatus: status == OrderStatus.pendingPayment
+        ? PaymentStatus.unpaid
+        : PaymentStatus.paid,
+    savedAt: DateTime.utc(2026, 7, 1, 10),
+    recoveryExpiresAt: DateTime.utc(2026, 7, 2, 10),
   );
 }
 

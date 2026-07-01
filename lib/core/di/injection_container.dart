@@ -1,6 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
+import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/demo_kiosk_repositories.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
@@ -14,6 +15,11 @@ Future<void> init() async {
   // External
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
+  sl.registerLazySingleton<OrderRecoveryStore>(
+    () => AppConfig.demoMode
+        ? const NoopOrderRecoveryStore()
+        : SharedPreferencesOrderRecoveryStore(sl<SharedPreferences>()),
+  );
 
   // Network
   sl.registerLazySingleton<DioClient>(

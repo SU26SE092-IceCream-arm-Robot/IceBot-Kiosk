@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
+import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart';
@@ -13,10 +14,13 @@ class KioskController extends ChangeNotifier {
     required MenuRepository menuRepository,
     required OrderRepository orderRepository,
     required PaymentRepository paymentRepository,
+    OrderRecoveryStore? orderRecoveryStore,
     String? kioskId,
   }) : _menuRepository = menuRepository,
        _orderRepository = orderRepository,
        _paymentRepository = paymentRepository,
+       _orderRecoveryStore =
+           orderRecoveryStore ?? const NoopOrderRecoveryStore(),
        _kioskId = kioskId?.trim().isNotEmpty == true
            ? kioskId!.trim()
            : AppConfig.effectiveKioskId,
@@ -25,6 +29,7 @@ class KioskController extends ChangeNotifier {
   final MenuRepository _menuRepository;
   final OrderRepository _orderRepository;
   final PaymentRepository _paymentRepository;
+  final OrderRecoveryStore _orderRecoveryStore;
   final String _kioskId;
   final bool _hasKioskId;
 
@@ -40,7 +45,10 @@ class KioskController extends ChangeNotifier {
   PaymentSessionResult? _activePaymentSession;
   PaymentStatusResult? _activePaymentStatus;
   ApiException? _trackingError;
+  ApiException? _recoveryError;
   bool _isRefreshingPaymentStatus = false;
+  bool _isRefreshingOrder = false;
+  bool _isRestoringOrder = false;
   bool _isCancellingOrder = false;
   _CheckoutIntent? _checkoutIntent;
   OrderResult? _recoverableOrder;
@@ -69,7 +77,10 @@ class KioskController extends ChangeNotifier {
   PaymentSessionResult? get activePaymentSession => _activePaymentSession;
   PaymentStatusResult? get activePaymentStatus => _activePaymentStatus;
   ApiException? get trackingError => _trackingError;
+  ApiException? get recoveryError => _recoveryError;
   bool get isRefreshingPaymentStatus => _isRefreshingPaymentStatus;
+  bool get isRefreshingOrder => _isRefreshingOrder;
+  bool get isRestoringOrder => _isRestoringOrder;
   bool get isCancellingOrder => _isCancellingOrder;
   bool get canRetryPayment {
     final order = _recoverableOrder ?? _activeOrder;
@@ -78,6 +89,64 @@ class KioskController extends ChangeNotifier {
     }
 
     return _activePaymentStatus?.canRetryPayment ?? order.canRetryPayment;
+  }
+
+  Future<OrderResult?> restoreActiveOrder() async {
+    if (!_hasKioskId || _isRestoringOrder) {
+      return null;
+    }
+
+    _isRestoringOrder = true;
+    _recoveryError = null;
+    notifyListeners();
+
+    try {
+      final recovery = await _orderRecoveryStore.read(_kioskId);
+      if (recovery == null) {
+        return null;
+      }
+
+      final order = await _orderRepository.getOrder(recovery.orderId);
+      if (order.id != recovery.orderId || order.kioskId != _kioskId) {
+        await _orderRecoveryStore.clear();
+        return null;
+      }
+      if (_isRecoveryTerminal(order)) {
+        await _orderRecoveryStore.clear();
+        return null;
+      }
+
+      _activeOrder = order;
+      _activePaymentSession = null;
+      _activePaymentStatus = null;
+      _recoverableOrder =
+          order.status == OrderStatus.draft ||
+              order.status == OrderStatus.pendingPayment
+          ? order
+          : null;
+      _trackingError = null;
+      await _persistOrderRecovery(
+        order,
+        paymentExpiresAt: recovery.paymentExpiresAt,
+      );
+      return order;
+    } on ApiException catch (error) {
+      if (error.type == ApiErrorType.notFound) {
+        await _orderRecoveryStore.clear();
+      } else {
+        _recoveryError = error;
+      }
+      return null;
+    } on Object {
+      _recoveryError = const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Không thể khôi phục đơn hàng đang xử lý.',
+      );
+      return null;
+    } finally {
+      _isRestoringOrder = false;
+      notifyListeners();
+    }
   }
 
   Future<void> loadMenu({bool force = false}) async {
@@ -293,6 +362,7 @@ class KioskController extends ChangeNotifier {
 
       _activeOrder = order;
       _recoverableOrder = order;
+      await _persistOrderRecovery(order);
       notifyListeners();
 
       return await _createPaymentSessionFor(order);
@@ -511,6 +581,10 @@ class KioskController extends ChangeNotifier {
       _checkoutIntent = null;
       _paymentAttemptIdempotencyKey = null;
       _cartLines.clear();
+      await _persistOrderRecovery(
+        order,
+        paymentExpiresAt: paymentSession.expiresAt,
+      );
       return CheckoutResult(order: order, paymentSession: paymentSession);
     } on ApiException catch (error) {
       if (error.type != ApiErrorType.network &&
@@ -660,10 +734,17 @@ class KioskController extends ChangeNotifier {
   }
 
   Future<OrderResult?> refreshOrder(String orderId) async {
+    if (_isRefreshingOrder) {
+      return null;
+    }
+
+    _isRefreshingOrder = true;
     try {
       final order = await _orderRepository.getOrder(orderId);
+      _validateTrackedOrder(order, orderId);
       _activeOrder = order;
       _trackingError = null;
+      await _persistOrderRecovery(order);
       notifyListeners();
       return order;
     } on ApiException catch (error) {
@@ -677,6 +758,8 @@ class KioskController extends ChangeNotifier {
       );
       notifyListeners();
       return null;
+    } finally {
+      _isRefreshingOrder = false;
     }
   }
 
@@ -696,6 +779,7 @@ class KioskController extends ChangeNotifier {
         reason: reason ?? 'Customer cancelled before payment.',
       );
       _activeOrder = cancelled;
+      await _persistOrderRecovery(cancelled);
       return cancelled;
     } on ApiException catch (error) {
       _trackingError = error;
@@ -710,6 +794,37 @@ class KioskController extends ChangeNotifier {
       _isCancellingOrder = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _persistOrderRecovery(
+    OrderResult order, {
+    DateTime? paymentExpiresAt,
+  }) async {
+    try {
+      await _orderRecoveryStore.save(order, paymentExpiresAt: paymentExpiresAt);
+    } on Object {
+      // Recovery is best-effort and must never block ordering or tracking.
+    }
+  }
+
+  void _validateTrackedOrder(OrderResult order, String orderId) {
+    if (order.id.isEmpty || order.id != orderId || order.kioskId != _kioskId) {
+      throw const ApiException(
+        type: ApiErrorType.unknown,
+        message: 'Trạng thái đơn hàng từ máy chủ không hợp lệ.',
+      );
+    }
+  }
+
+  bool _isRecoveryTerminal(OrderResult order) {
+    return order.requiresStaffSupport ||
+        order.status == OrderStatus.completed ||
+        order.status == OrderStatus.cancelled ||
+        order.status == OrderStatus.failed ||
+        order.status == OrderStatus.executionRejected ||
+        order.status == OrderStatus.refundRequired ||
+        order.status == OrderStatus.refunded ||
+        order.status == OrderStatus.compensated;
   }
 }
 

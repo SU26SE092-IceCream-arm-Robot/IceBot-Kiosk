@@ -27,6 +27,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   DateTime? _startedAt;
   bool _startedPolling = false;
   bool _timedOut = false;
+  bool _pollPausedForError = false;
   bool _pollInFlight = false;
 
   @override
@@ -63,8 +64,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     try {
       final controller = KioskScope.of(context);
       final order = await controller.refreshOrder(widget.orderId);
-      if (!mounted || order == null) {
+      if (!mounted) {
         return;
+      }
+      if (order == null) {
+        if (controller.trackingError != null) {
+          setState(() => _pollPausedForError = true);
+          _stopPolling();
+        }
+        return;
+      }
+
+      if (_pollPausedForError) {
+        setState(() => _pollPausedForError = false);
       }
 
       if (KioskStatusPresenter.isOrderTerminal(order)) {
@@ -77,13 +89,23 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   void _startPolling() {
     _stopPolling();
-    _pollNow();
+    _pollPausedForError = false;
     _timer = Timer.periodic(_pollInterval, (_) => _pollNow());
+    _pollNow();
   }
 
   void _stopPolling() {
     _timer?.cancel();
     _timer = null;
+  }
+
+  void _retryPolling() {
+    setState(() {
+      _timedOut = false;
+      _pollPausedForError = false;
+      _startedAt = DateTime.now();
+    });
+    _startPolling();
   }
 
   @override
@@ -100,7 +122,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           title: 'Không thể cập nhật đơn hàng',
           error: controller.trackingError,
           actionLabel: 'Thử lại',
-          onAction: _pollNow,
+          onAction: _retryPolling,
         ),
       );
     }
@@ -157,6 +179,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   controller.activePaymentStatus,
                 ),
                 isCancelling: controller.isCancellingOrder,
+                canRetryPayment:
+                    order.status == OrderStatus.pendingPayment &&
+                    controller.activePaymentSession == null &&
+                    controller.canRetryPayment,
+                isRetryingPayment: controller.isCheckingOut,
+                canRetryTracking: _pollPausedForError || _timedOut,
+                onRetryTracking: _retryPolling,
+                onRetryPayment: () async {
+                  final result = await controller.retryPaymentSession();
+                  if (context.mounted && result != null) {
+                    context.go(AppRouter.paymentPath(result.order.id));
+                  }
+                },
                 onCancel: () async {
                   _stopPolling();
                   final cancelled = await controller.cancelActiveOrder();
@@ -300,12 +335,22 @@ class _OrderActionPanel extends StatelessWidget {
     required this.order,
     required this.canCancel,
     required this.isCancelling,
+    required this.canRetryPayment,
+    required this.isRetryingPayment,
+    required this.canRetryTracking,
+    required this.onRetryTracking,
+    required this.onRetryPayment,
     required this.onCancel,
   });
 
   final OrderResult order;
   final bool canCancel;
   final bool isCancelling;
+  final bool canRetryPayment;
+  final bool isRetryingPayment;
+  final bool canRetryTracking;
+  final VoidCallback onRetryTracking;
+  final Future<void> Function() onRetryPayment;
   final Future<void> Function() onCancel;
 
   @override
@@ -330,17 +375,50 @@ class _OrderActionPanel extends StatelessWidget {
             value: KioskFormatters.shortDateTime(order.placedAt),
           ),
           const SizedBox(height: 28),
+          if (canRetryTracking) ...[
+            FilledButton.icon(
+              onPressed: onRetryTracking,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử cập nhật lại'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (canRetryPayment) ...[
+            FilledButton.icon(
+              onPressed: isRetryingPayment ? null : onRetryPayment,
+              icon: isRetryingPayment
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    )
+                  : const Icon(Icons.qr_code_2_outlined),
+              label: Text(
+                isRetryingPayment
+                    ? 'Đang tạo lại mã...'
+                    : 'Tạo lại mã thanh toán',
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (canCancel)
             OutlinedButton.icon(
               onPressed: isCancelling ? null : onCancel,
               icon: const Icon(Icons.cancel_outlined),
               label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
             )
-          else
+          else if (KioskStatusPresenter.isOrderTerminal(order))
             FilledButton.icon(
               onPressed: () => context.go(AppRouter.menu),
               icon: const Icon(Icons.home_outlined),
-              label: const Text('Tạo đơn mới'),
+              label: const Text('Về menu'),
+            )
+          else
+            Text(
+              order.status == OrderStatus.ready
+                  ? 'Vui lòng nhận món trước khi bắt đầu đơn mới.'
+                  : 'Đơn hàng đang được xử lý. Vui lòng chờ cập nhật tiếp theo.',
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
         ],
       ),

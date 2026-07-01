@@ -3,6 +3,7 @@ import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
 import 'package:icebot_kiosk/config/themes/app_theme.dart';
 import 'package:icebot_kiosk/core/di/injection_container.dart' as di;
+import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository.dart';
@@ -55,6 +56,7 @@ class MyApp extends StatelessWidget {
       menuRepository: di.sl<MenuRepository>(),
       orderRepository: di.sl<OrderRepository>(),
       paymentRepository: di.sl<PaymentRepository>(),
+      orderRecoveryStore: di.sl<OrderRecoveryStore>(),
     );
   }
 }

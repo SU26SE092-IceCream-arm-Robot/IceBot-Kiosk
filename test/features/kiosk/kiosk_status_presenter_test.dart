@@ -57,6 +57,90 @@ void main() {
     expect(preparing.title, 'Robot đang chuẩn bị');
   });
 
+  test('maps every backend order status to customer-safe copy', () {
+    const expectedTitles = {
+      OrderStatus.draft: 'Đơn hàng đang nhập',
+      OrderStatus.pendingPayment: 'Đang chờ thanh toán',
+      OrderStatus.paid: 'Đã thanh toán',
+      OrderStatus.readyForExecution: 'Đơn đang chờ xử lý',
+      OrderStatus.accepted: 'Hệ thống đã nhận đơn',
+      OrderStatus.preparing: 'Robot đang chuẩn bị',
+      OrderStatus.ready: 'Món đã sẵn sàng',
+      OrderStatus.completed: 'Hoàn tất',
+      OrderStatus.cancelled: 'Đơn hàng đã hủy',
+      OrderStatus.failed: 'Đơn hàng gặp lỗi',
+      OrderStatus.executionRejected: 'Đơn hàng gặp lỗi',
+      OrderStatus.refundRequired: 'Cần hỗ trợ hoàn tiền',
+      OrderStatus.refunded: 'Đã hoàn tiền',
+      OrderStatus.compensated: 'Đã hỗ trợ bù',
+      OrderStatus.unknown: 'Trạng thái chưa xác định',
+    };
+
+    for (final entry in expectedTitles.entries) {
+      final view = _present(entry.key);
+      expect(view.title, entry.value, reason: entry.key.name);
+      if (entry.key != OrderStatus.preparing) {
+        expect(view.title, isNot(contains('Robot')), reason: entry.key.name);
+      }
+    }
+  });
+
+  test('only terminal and staff-support orders stop polling', () {
+    for (final status in [
+      OrderStatus.completed,
+      OrderStatus.failed,
+      OrderStatus.cancelled,
+      OrderStatus.executionRejected,
+      OrderStatus.refundRequired,
+      OrderStatus.refunded,
+      OrderStatus.compensated,
+    ]) {
+      expect(
+        KioskStatusPresenter.isOrderTerminal(_order(status: status)),
+        isTrue,
+        reason: status.name,
+      );
+    }
+
+    for (final status in [
+      OrderStatus.paid,
+      OrderStatus.readyForExecution,
+      OrderStatus.accepted,
+      OrderStatus.preparing,
+      OrderStatus.ready,
+    ]) {
+      expect(
+        KioskStatusPresenter.isOrderTerminal(_order(status: status)),
+        isFalse,
+        reason: status.name,
+      );
+    }
+
+    expect(
+      KioskStatusPresenter.isOrderTerminal(
+        _order(status: OrderStatus.preparing, requiresStaffSupport: true),
+      ),
+      isTrue,
+    );
+  });
+
+  test('requiresStaffSupport always shows staff guidance', () {
+    final view = KioskStatusPresenter.order(
+      _order(
+        status: OrderStatus.refundRequired,
+        requiresStaffSupport: true,
+        customerStatusMessage: 'Vui lòng liên hệ nhân viên tại kiosk.',
+      ),
+      primary: Colors.teal,
+      success: Colors.green,
+      warning: Colors.orange,
+      danger: Colors.red,
+    );
+
+    expect(view.title, 'Cần nhân viên hỗ trợ');
+    expect(view.message, contains('liên hệ nhân viên'));
+  });
+
   test('allows cancel only before paid', () {
     final pendingOrder = _order(status: OrderStatus.pendingPayment);
     final paidOrder = _order(
@@ -257,6 +341,8 @@ PaymentStatusResult _paymentStatus({
 OrderResult _order({
   required OrderStatus status,
   PaymentStatus paymentStatus = PaymentStatus.unpaid,
+  bool requiresStaffSupport = false,
+  String customerStatusMessage = '',
 }) {
   return OrderResult(
     id: 'order-id',
@@ -273,9 +359,9 @@ OrderResult _order({
     paidAmount: paymentStatus == PaymentStatus.paid ? 35000 : 0,
     placedAt: DateTime.utc(2026, 6, 18),
     customerStatus: status.name,
-    customerStatusMessage: '',
+    customerStatusMessage: customerStatusMessage,
     canRetryPayment: false,
-    requiresStaffSupport: false,
+    requiresStaffSupport: requiresStaffSupport,
     items: const [],
   );
 }

@@ -27,9 +27,24 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
     _requestedLoad = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        KioskScope.of(context).loadMenu();
+        _initialize();
       }
     });
+  }
+
+  Future<void> _initialize() async {
+    final controller = KioskScope.of(context);
+    final recoveredOrder = await controller.restoreActiveOrder();
+    if (!mounted) {
+      return;
+    }
+    if (recoveredOrder != null) {
+      context.go(AppRouter.orderPath(recoveredOrder.id));
+      return;
+    }
+    if (controller.recoveryError == null) {
+      await controller.loadMenu(force: true);
+    }
   }
 
   @override
@@ -39,6 +54,20 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
     }
 
     final controller = KioskScope.of(context);
+    final recoveryError = controller.recoveryError;
+    if (recoveryError != null) {
+      return Scaffold(
+        body: KioskBackdrop(
+          child: KioskErrorPanel(
+            title: 'Không thể khôi phục đơn hàng',
+            error: recoveryError,
+            actionLabel: 'Thử lại',
+            onAction: _initialize,
+          ),
+        ),
+      );
+    }
+
     final menuError = controller.menuError;
     if (menuError != null) {
       return Scaffold(

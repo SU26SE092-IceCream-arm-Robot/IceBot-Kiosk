@@ -285,6 +285,10 @@ class KioskStatusPresenter {
   }
 
   static bool isOrderTerminal(OrderResult order) {
+    if (order.requiresStaffSupport) {
+      return true;
+    }
+
     return switch (order.status) {
       OrderStatus.completed ||
       OrderStatus.cancelled ||
