@@ -36,22 +36,33 @@ class BotStepRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: IceBotSpacing.stepRailHeight,
-      child: Row(
-        children: [
-          for (int i = 0; i < _labels.length; i++) ...[
-            _StepNode(
-              label: _labels[i],
-              index: i,
-              currentStep: currentStep,
-              isError: isError,
-            ),
-            if (i < _labels.length - 1)
-              Expanded(child: _Connector(index: i, currentStep: currentStep)),
-          ],
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 520;
+        return SizedBox(
+          height: IceBotSpacing.stepRailHeight,
+          child: Row(
+            children: [
+              for (int i = 0; i < _labels.length; i++) ...[
+                Expanded(
+                  flex: 4,
+                  child: _StepNode(
+                    label: _labels[i],
+                    index: i,
+                    currentStep: currentStep,
+                    isError: isError,
+                    isCompact: isCompact,
+                  ),
+                ),
+                if (i < _labels.length - 1)
+                  Expanded(
+                    child: _Connector(index: i, currentStep: currentStep),
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -64,12 +75,14 @@ class _StepNode extends StatelessWidget {
     required this.index,
     required this.currentStep,
     required this.isError,
+    required this.isCompact,
   });
 
   final String label;
   final int index;
   final int currentStep;
   final bool isError;
+  final bool isCompact;
 
   bool get _isCompleted => index < currentStep;
   bool get _isActive => index == currentStep;
@@ -108,9 +121,13 @@ class _StepNode extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: labelColor,
             fontWeight: _isActive ? FontWeight.w700 : FontWeight.w500,
+            fontSize: isCompact ? 10 : null,
           ),
         ),
       ],
@@ -151,9 +168,10 @@ class _NodeCircleState extends State<_NodeCircle>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _glow = Tween<double>(begin: 1.0, end: 1.35).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _glow = Tween<double>(
+      begin: 1.0,
+      end: 1.35,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     if (widget.isActive) {
       _controller.repeat(reverse: true);
     }
@@ -188,11 +206,7 @@ class _NodeCircleState extends State<_NodeCircle>
         width: nodeSize,
         height: nodeSize,
         decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        child: const Icon(
-          Icons.check_rounded,
-          size: 16,
-          color: Colors.white,
-        ),
+        child: const Icon(Icons.check_rounded, size: 16, color: Colors.white),
       );
     }
 
@@ -314,7 +328,9 @@ class _Connector extends StatelessWidget {
       child: Container(
         height: 2,
         decoration: BoxDecoration(
-          color: completed ? IceBotColors.mintSuccess : IceBotColors.frostBorder,
+          color: completed
+              ? IceBotColors.mintSuccess
+              : IceBotColors.frostBorder,
           borderRadius: BorderRadius.circular(1),
         ),
       ),

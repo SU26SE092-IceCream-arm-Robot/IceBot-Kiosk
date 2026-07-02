@@ -11,7 +11,7 @@ void main() {
   testWidgets('compact cart does not overflow and keeps quantity actions', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(650, 1300);
+    tester.view.physicalSize = const Size(430, 932);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
       tester.view.resetPhysicalSize();

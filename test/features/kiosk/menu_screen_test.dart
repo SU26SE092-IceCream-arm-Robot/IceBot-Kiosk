@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
+import 'package:icebot_kiosk/config/themes/app_theme.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
@@ -9,6 +10,7 @@ import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/menu_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/bot_step_rail.dart';
 
 void main() {
   testWidgets('shows empty state when backend returns no menu items', (
@@ -49,7 +51,9 @@ void main() {
     expect(find.textContaining('chưa được cấu hình'), findsOneWidget);
   });
 
-  testWidgets('shows validation error state when kioskId is missing', (tester) async {
+  testWidgets('shows validation error state when kioskId is missing', (
+    tester,
+  ) async {
     await _pumpMenu(
       tester,
       response: _emptyMenu(),
@@ -57,12 +61,41 @@ void main() {
     );
 
     expect(find.text('Cấu hình kiosk không hợp lệ'), findsOneWidget);
-    expect(find.textContaining('Kiosk chưa được cấu hình. Vui lòng thiết lập Kiosk ID.'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Kiosk chưa được cấu hình. Vui lòng thiết lập Kiosk ID.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('compact menu uses storefront header without step rail', (
+    tester,
+  ) async {
+    await _pumpMenu(
+      tester,
+      response: _menuWithItem(),
+      size: const Size(430, 932),
+    );
+
+    expect(find.text('Kem robot sẵn sàng phục vụ'), findsOneWidget);
+    expect(
+      find.text('Chọn món, quét QR và nhận kem trong vài bước.'),
+      findsOneWidget,
+    );
+    expect(find.byType(BotStepRail), findsNothing);
+    expect(find.text('Kem Vanilla'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 
-Future<void> _pumpMenu(WidgetTester tester, {required Object response, String? kioskId}) async {
-  tester.view.physicalSize = const Size(1080, 1920);
+Future<void> _pumpMenu(
+  WidgetTester tester, {
+  required Object response,
+  String? kioskId,
+  Size size = const Size(1080, 1920),
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -78,12 +111,43 @@ Future<void> _pumpMenu(WidgetTester tester, {required Object response, String? k
 
   await tester.pumpWidget(
     MaterialApp(
+      theme: AppTheme.lightTheme,
       home: KioskScope(controller: controller, child: const MenuScreen()),
     ),
   );
   // Replaced pumpAndSettle with standard pumps because BotStepRail has infinite animations
   await tester.pump();
   await tester.pump(const Duration(seconds: 1));
+}
+
+RuntimeMenuResult _menuWithItem() {
+  final empty = _emptyMenu();
+  return RuntimeMenuResult(
+    snapshotId: empty.snapshotId,
+    kioskId: empty.kioskId,
+    generatedAt: empty.generatedAt,
+    expiresAt: empty.expiresAt,
+    availabilitySource: empty.availabilitySource,
+    containsMachineRuntimeState: empty.containsMachineRuntimeState,
+    items: const [
+      RuntimeMenuItem(
+        menuId: 'menu-id',
+        menuItemId: 'menu-item-id',
+        productId: 'product-id',
+        productVariantId: 'variant-id',
+        menuItemCode: 'VANILLA',
+        productCode: 'VANILLA',
+        productVariantCode: 'VANILLA-PACKAGED',
+        displayName: 'Kem Vanilla',
+        description: 'Kem vanilla mát lạnh.',
+        price: 35000,
+        discountAmount: 0,
+        finalPrice: 35000,
+        currency: 'VND',
+        preparationTimeSeconds: 45,
+      ),
+    ],
+  );
 }
 
 RuntimeMenuResult _emptyMenu() {
