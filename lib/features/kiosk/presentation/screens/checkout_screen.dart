@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
+import 'package:icebot_kiosk/config/themes/icebot_colors.dart';
+import 'package:icebot_kiosk/config/themes/icebot_spacing.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/bot_loading_indicator.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/bot_step_rail.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
@@ -17,81 +21,129 @@ class CheckoutScreen extends StatelessWidget {
     if (controller.isCartEmpty) {
       final checkoutError = controller.checkoutError;
       return Scaffold(
-        appBar: AppBar(title: const Text('Xác nhận đơn hàng')),
-        body: KioskEmptyState(
-          title: checkoutError == null
-              ? 'Chưa có món để thanh toán'
-              : 'Giỏ hàng cần được cập nhật',
-          message:
-              checkoutError?.message ??
-              'Giỏ hàng đang trống. Vui lòng chọn món trước khi tạo mã thanh toán.',
-          icon: checkoutError == null
-              ? Icons.shopping_cart_outlined
-              : Icons.sync_problem_outlined,
-          actionLabel: 'Về menu',
-          onAction: () => context.go(AppRouter.menu),
+        body: SafeArea(
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(28, 20, 28, 12),
+                child: BotStepRail(currentStep: 2),
+              ),
+              Expanded(
+                child: KioskEmptyState(
+                  title: checkoutError == null
+                      ? 'Chưa có món để thanh toán'
+                      : 'Giỏ hàng cần được cập nhật',
+                  message:
+                      checkoutError?.message ??
+                      'Giỏ hàng đang trống. Vui lòng chọn món trước khi thanh toán.',
+                  icon: checkoutError == null
+                      ? Icons.shopping_cart_outlined
+                      : Icons.sync_problem_outlined,
+                  actionLabel: 'Về menu',
+                  onAction: () => context.go(AppRouter.menu),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Xác nhận đơn hàng'),
-        leading: IconButton(
-          tooltip: 'Về giỏ hàng',
-          onPressed: controller.isCheckingOut
-              ? null
-              : () => context.go(AppRouter.cart),
-          icon: const Icon(Icons.arrow_back),
-        ),
-      ),
       body: SafeArea(
         child: KioskBackdrop(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final layout = KioskLayoutSpec.of(context);
-              final useWideLayout =
-                  !layout.useSingleColumn && constraints.maxWidth >= 980;
-              return Padding(
-                padding: EdgeInsets.all(layout.screenPadding),
-                child: useWideLayout
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            flex: 7,
-                            child: _CheckoutItems(lines: controller.cartLines),
-                          ),
-                          const SizedBox(width: 28),
-                          Expanded(
-                            flex: 4,
-                            child: _CheckoutAction(controller: controller),
-                          ),
-                        ],
-                      )
-                    : ListView(
-                        children: [
-                          SizedBox(
-                            height: _checkoutItemsHeight(
-                              controller.cartLines.length,
-                              layout,
+          child: Column(
+            children: [
+              // Header section
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 28, 12),
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 12),
+                      child: BotStepRail(currentStep: 2),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        IconButton(
+                          iconSize: 32,
+                          onPressed: controller.isCheckingOut
+                              ? null
+                              : () => context.go(AppRouter.cart),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          color: IceBotColors.botNavy,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Xác nhận đơn hàng',
+                          style: Theme.of(context).textTheme.displayMedium,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Content section
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final layout = KioskLayoutSpec.of(context);
+                    final useWideLayout =
+                        !layout.useSingleColumn && constraints.maxWidth >= 980;
+
+                    return Padding(
+                      padding: EdgeInsets.all(layout.screenPadding),
+                      child: useWideLayout
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  flex: 6,
+                                  child: _CheckoutItems(
+                                    lines: controller.cartLines,
+                                  ),
+                                ),
+                                const SizedBox(width: 28),
+                                Expanded(
+                                  flex: 4,
+                                  child: _CheckoutAction(
+                                    controller: controller,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView(
+                              padding: EdgeInsets.only(
+                                bottom: layout.bottomOverlayPadding,
+                              ),
+                              children: [
+                                SizedBox(
+                                  height: _checkoutItemsHeight(
+                                    controller.cartLines.length,
+                                    layout,
+                                  ),
+                                  child: _CheckoutItems(
+                                    lines: controller.cartLines,
+                                  ),
+                                ),
+                                SizedBox(height: layout.sectionGap),
+                                _CheckoutAction(controller: controller),
+                              ],
                             ),
-                            child: _CheckoutItems(lines: controller.cartLines),
-                          ),
-                          SizedBox(height: layout.sectionGap),
-                          _CheckoutAction(controller: controller),
-                          SizedBox(height: layout.bottomOverlayPadding),
-                        ],
-                      ),
-              );
-            },
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
       bottomNavigationBar: KioskBottomActionBar(
         primaryLabel: controller.isCheckingOut
             ? 'Đang tạo mã...'
-            : 'Tạo mã thanh toán',
+            : 'Tạo mã QR thanh toán',
         primaryIcon: Icons.qr_code_2_outlined,
         onPrimary: controller.isCheckingOut
             ? null
@@ -117,16 +169,16 @@ class CheckoutScreen extends StatelessWidget {
   }
 
   double _checkoutItemsHeight(int lineCount, KioskLayoutSpec layout) {
-    final baseHeight = layout.isCompact ? 200.0 : 340.0;
-    final itemHeight = layout.isCompact ? 64.0 : 86.0;
+    final baseHeight = layout.isCompact ? 220.0 : 360.0;
+    final itemHeight = layout.isCompact ? 68.0 : 92.0;
     final wantedHeight = baseHeight + lineCount * itemHeight;
     if (layout.isCompact) {
-      return wantedHeight.clamp(280.0, 380.0).toDouble();
+      return wantedHeight.clamp(300.0, 420.0).toDouble();
     }
     if (layout.isTallKiosk) {
-      return wantedHeight.clamp(420.0, 720.0).toDouble();
+      return wantedHeight.clamp(480.0, 780.0).toDouble();
     }
-    return wantedHeight.clamp(360.0, 520.0).toDouble();
+    return wantedHeight.clamp(400.0, 580.0).toDouble();
   }
 }
 
@@ -142,25 +194,56 @@ class _CheckoutItems extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Đơn hàng của bạn',
-            style: Theme.of(context).textTheme.displayMedium,
+          Row(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                color: IceBotColors.botNavy,
+                size: 32,
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'Chi tiết đơn hàng',
+                style: Theme.of(context).textTheme.displayMedium,
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            'Vui lòng kiểm tra lại trước khi tạo mã thanh toán.',
+            'Vui lòng kiểm tra lại số lượng và món trước khi tạo mã thanh toán.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           Expanded(
             child: ListView.separated(
               itemCount: lines.length,
-              separatorBuilder: (context, index) => const Divider(height: 28),
+              separatorBuilder: (context, index) => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Divider(),
+              ),
               itemBuilder: (context, index) {
                 final line = lines[index];
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: IceBotColors.frostSurface,
+                        border: Border.all(color: IceBotColors.frostBorder),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'x${line.quantity}',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: IceBotColors.botNavy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,14 +252,19 @@ class _CheckoutItems extends StatelessWidget {
                             line.item.displayName,
                             style: Theme.of(context).textTheme.headlineMedium,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           Text(
-                            'Số lượng: ${line.quantity}',
-                            style: Theme.of(context).textTheme.bodyLarge,
+                            KioskFormatters.money(
+                              line.item.finalPrice,
+                              currency: line.item.currency,
+                            ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(color: IceBotColors.botNavyMuted),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(width: 16),
                     Text(
                       KioskFormatters.money(
                         line.lineTotal,
@@ -210,45 +298,43 @@ class _CheckoutAction extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const _PaymentInstructionBanner(),
-          const SizedBox(height: 22),
-          Text('Cần thanh toán', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 28),
+          Text(
+            'Tổng thanh toán',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           Text(
             KioskFormatters.money(controller.cartTotal),
-            style: Theme.of(context).textTheme.displayMedium,
+            style: Theme.of(
+              context,
+            ).textTheme.displayLarge?.copyWith(color: IceBotColors.icePrimary),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'IceBot sẽ tạo đơn hàng và phiên thanh toán. Vui lòng không tắt màn hình trong lúc xử lý.',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
+          const SizedBox(height: 24),
+          if (controller.isCheckingOut) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: BotLoadingIndicator(size: 48),
+              ),
+            ),
+            Text(
+              'IceBot đang kết nối hệ thống thanh toán.\nVui lòng không thao tác khác.',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: IceBotColors.botNavyMuted),
+            ),
+          ] else ...[
+            Text(
+              'IceBot sẽ tạo đơn hàng và phiên thanh toán. Vui lòng không tắt màn hình trong lúc xử lý.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ],
           if (controller.checkoutError != null) ...[
             const SizedBox(height: 20),
             _CheckoutErrorMessage(error: controller.checkoutError!),
           ],
-          const SizedBox(height: 28),
-          FilledButton.icon(
-            onPressed: controller.isCheckingOut
-                ? null
-                : () async {
-                    final result = await controller.checkout();
-                    if (context.mounted && result != null) {
-                      context.go(AppRouter.paymentPath(result.order.id));
-                    }
-                  },
-            icon: controller.isCheckingOut
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  )
-                : const Icon(Icons.qr_code_2_outlined),
-            label: Text(
-              controller.isCheckingOut
-                  ? 'Đang tạo mã thanh toán...'
-                  : 'Tạo mã thanh toán',
-            ),
-          ),
         ],
       ),
     );
@@ -263,24 +349,24 @@ class _PaymentInstructionBanner extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(
-            Icons.qr_code_2_outlined,
+            Icons.qr_code_scanner_rounded,
             color: colorScheme.onPrimaryContainer,
-            size: 24,
+            size: 32,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 16),
           Expanded(
             child: Text(
-              'Thanh toán bằng mã QR ở bước tiếp theo',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              'Quét mã QR để thanh toán ở bước tiếp theo',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: colorScheme.onPrimaryContainer,
                 fontWeight: FontWeight.w800,
               ),
@@ -302,22 +388,26 @@ class _CheckoutErrorMessage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
+        color: IceBotColors.dangerContainer,
+        borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+        border: Border.all(
+          color: IceBotColors.dangerRed.withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.error_outline,
-            color: Theme.of(context).colorScheme.onErrorContainer,
+            Icons.error_outline_rounded,
+            color: IceBotColors.dangerRed,
+            size: 28,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               _friendlyMessage(error),
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onErrorContainer,
+                color: IceBotColors.dangerRed,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -331,7 +421,6 @@ class _CheckoutErrorMessage extends StatelessWidget {
     if (error.type == ApiErrorType.upstream) {
       return 'Chưa thể tạo mã thanh toán. Vui lòng thử lại hoặc nhờ nhân viên hỗ trợ. Chi tiết: ${error.message}';
     }
-
     return error.message;
   }
 }
