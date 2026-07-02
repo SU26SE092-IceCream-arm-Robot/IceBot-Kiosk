@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:icebot_kiosk/config/themes/icebot_colors.dart';
+import 'package:icebot_kiosk/config/themes/icebot_spacing.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
+/// Full-screen error panel — Frost-Tech reskin.
+///
+/// Maps [ApiException.type] to a contextual icon and helper text.
+/// The public constructor and all parameters are unchanged — all existing call
+/// sites continue to compile without modification.
 class KioskErrorPanel extends StatelessWidget {
   const KioskErrorPanel({
     required this.title,
@@ -18,10 +25,12 @@ class KioskErrorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
+    final layout = KioskLayoutSpec.of(context);
     final helperText = _helperText(error);
     final primaryMessage = _primaryMessage(error);
-    final layout = KioskLayoutSpec.of(context);
+    final iconBoxSize = layout.isCompact ? 104.0 : 120.0;
+    final iconSize = layout.isCompact ? 58.0 : 70.0;
 
     return Center(
       child: ConstrainedBox(
@@ -30,52 +39,67 @@ class KioskErrorPanel extends StatelessWidget {
           padding: EdgeInsets.all(layout.screenPadding),
           child: KioskSectionCard(
             padding: EdgeInsets.symmetric(
-              horizontal: layout.isCompact ? 26 : 42,
-              vertical: layout.isCompact ? 34 : 46,
+              horizontal: layout.isCompact ? 28 : 44,
+              vertical: layout.isCompact ? 36 : 50,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Error icon box
                 Container(
-                  width: layout.isCompact ? 104 : 116,
-                  height: layout.isCompact ? 104 : 116,
+                  width: iconBoxSize,
+                  height: iconBoxSize,
                   decoration: BoxDecoration(
-                    color: colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: colorScheme.error),
+                    color: IceBotColors.dangerContainer,
+                    borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+                    border: Border.all(
+                      color: IceBotColors.dangerRed.withValues(alpha: 0.35),
+                    ),
                   ),
                   child: Icon(
                     _iconFor(error),
-                    color: colorScheme.error,
-                    size: layout.isCompact ? 58 : 66,
+                    color: IceBotColors.dangerRed,
+                    size: iconSize,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
+                // Title
                 Text(
                   title,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.displayMedium,
                 ),
                 const SizedBox(height: 16),
+                // Primary message
                 Text(
                   primaryMessage,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
+                // Helper text
                 if (helperText != null) ...[
                   const SizedBox(height: 12),
                   Text(
                     helperText,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
+                // Action button
                 if (actionLabel != null && onAction != null) ...[
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 32),
                   FilledButton.icon(
                     onPressed: onAction,
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(Icons.refresh_rounded, size: 22),
                     label: Text(actionLabel!),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(
+                        double.minPositive,
+                        IceBotSpacing.primaryCTAHeight,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -86,6 +110,8 @@ class KioskErrorPanel extends StatelessWidget {
     );
   }
 
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
   IconData _iconFor(ApiException? error) {
     return switch (error?.type) {
       ApiErrorType.timeout => Icons.timer_off_outlined,
@@ -93,7 +119,7 @@ class KioskErrorPanel extends StatelessWidget {
       ApiErrorType.notFound => Icons.search_off_outlined,
       ApiErrorType.conflict => Icons.pause_circle_outline,
       ApiErrorType.upstream => Icons.payments_outlined,
-      _ => Icons.error_outline,
+      _ => Icons.error_outline_rounded,
     };
   }
 
@@ -101,12 +127,15 @@ class KioskErrorPanel extends StatelessWidget {
     return switch (error?.type) {
       ApiErrorType.timeout =>
         'Kết nối đang chậm. Vui lòng thử lại sau vài giây.',
-      ApiErrorType.network => 'Kiểm tra mạng của kiosk hoặc kết nối backend.',
-      ApiErrorType.notFound => 'Kiosk hoặc dữ liệu menu chưa được cấu hình.',
+      ApiErrorType.network =>
+        'Kiểm tra mạng của kiosk hoặc kết nối backend.',
+      ApiErrorType.notFound =>
+        'Kiosk hoặc dữ liệu menu chưa được cấu hình.',
       ApiErrorType.conflict =>
         'Kiosk hoặc sản phẩm đang tạm thời không sẵn sàng.',
-      ApiErrorType.upstream =>
-        error?.message == null ? null : 'Chi tiết kỹ thuật: ${error!.message}',
+      ApiErrorType.upstream => error?.message == null
+          ? null
+          : 'Chi tiết kỹ thuật: ${error!.message}',
       _ => null,
     };
   }
@@ -115,7 +144,6 @@ class KioskErrorPanel extends StatelessWidget {
     if (error?.type == ApiErrorType.upstream) {
       return 'Chưa thể tạo mã thanh toán. Vui lòng thử lại hoặc nhờ nhân viên hỗ trợ.';
     }
-
     return error?.message ?? 'Đã xảy ra lỗi. Vui lòng thử lại.';
   }
 }

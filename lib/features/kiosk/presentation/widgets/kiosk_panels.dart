@@ -1,5 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:icebot_kiosk/config/themes/icebot_colors.dart';
+import 'package:icebot_kiosk/config/themes/icebot_spacing.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/bot_loading_indicator.dart';
 
+// ─── Layout helper ────────────────────────────────────────────────────────────
+
+/// Responsive layout breakpoints and computed values for kiosk portrait screens.
+///
+/// All screens obtain this via [KioskLayoutSpec.of(context)]. Values adapt to
+/// 1080×1920, 1080×2400 and 1080×2520 portrait ratios as well as landscape
+/// debug views.
 class KioskLayoutSpec {
   const KioskLayoutSpec({
     required this.width,
@@ -17,10 +27,18 @@ class KioskLayoutSpec {
   bool get isWideLandscape => !isPortrait && width >= 980;
   bool get useSingleColumn => isTallKiosk || !isWideLandscape;
   int get portraitMenuColumns => width < 700 ? 1 : 2;
-  double get screenPadding => isCompact ? 18 : 32;
-  double get sectionGap => isCompact ? 18 : 26;
-  double get maxPortraitPanelWidth => isCompact ? double.infinity : 760;
-  double get bottomOverlayPadding => isCompact ? 120 : 112;
+
+  double get screenPadding =>
+      isCompact ? IceBotSpacing.screenPaddingCompact : IceBotSpacing.screenPaddingNormal;
+
+  double get sectionGap =>
+      isCompact ? IceBotSpacing.sectionGapCompact : IceBotSpacing.sectionGapNormal;
+
+  double get maxPortraitPanelWidth => isCompact ? double.infinity : 780;
+
+  double get bottomOverlayPadding => isCompact
+      ? IceBotSpacing.bottomOverlayPaddingCompact
+      : IceBotSpacing.bottomOverlayPaddingNormal;
 
   static KioskLayoutSpec of(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -29,11 +47,19 @@ class KioskLayoutSpec {
       width: size.width,
       height: size.height,
       isPortrait: isPortrait,
-      isTallKiosk: isPortrait && size.height / size.width >= 1.8,
+      // Tall kiosk: portrait ratio ≥ 1.6 (covers 1080×1920 and taller)
+      isTallKiosk: isPortrait && size.height / size.width >= 1.6,
     );
   }
 }
 
+// ─── KioskBackdrop ────────────────────────────────────────────────────────────
+
+/// Full-bleed background used as the root of every screen body.
+///
+/// Renders the Frost-Tech gradient: a very subtle top-to-bottom shift from
+/// [IceBotColors.frostSurface] to white, giving screens a cool, airy feel
+/// without being distracting.
 class KioskBackdrop extends StatelessWidget {
   const KioskBackdrop({required this.child, super.key});
 
@@ -46,7 +72,12 @@ class KioskBackdrop extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF1FAF6), Color(0xFFF8F7F0), Color(0xFFF6F8F4)],
+          colors: [
+            IceBotColors.frostSurface,        // #F4FAFF
+            Color(0xFFF9FCFF),                // mid
+            IceBotColors.snowCard,             // #FFFFFF
+          ],
+          stops: [0.0, 0.45, 1.0],
         ),
       ),
       child: child,
@@ -54,6 +85,11 @@ class KioskBackdrop extends StatelessWidget {
   }
 }
 
+// ─── KioskSectionCard ─────────────────────────────────────────────────────────
+
+/// White card panel used as the primary content container on every screen.
+///
+/// Uses Frost-Tech card tokens: 20 dp radius, frost border, soft shadow.
 class KioskSectionCard extends StatelessWidget {
   const KioskSectionCard({
     required this.child,
@@ -68,14 +104,14 @@ class KioskSectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFD8E3DF)),
+        color: IceBotColors.snowCard,
+        borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+        border: Border.all(color: IceBotColors.frostBorder),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x120F3D38),
-            blurRadius: 24,
-            offset: Offset(0, 10),
+            color: Color(0x0A102033),
+            blurRadius: IceBotSpacing.shadowBlur,
+            offset: Offset(0, 8),
           ),
         ],
       ),
@@ -84,6 +120,15 @@ class KioskSectionCard extends StatelessWidget {
   }
 }
 
+// ─── KioskBottomActionBar ─────────────────────────────────────────────────────
+
+/// Fixed bottom action bar with a primary CTA and optional secondary CTA.
+///
+/// Primary button height: [IceBotSpacing.primaryCTAHeight] (72 dp).
+/// Secondary button height: [IceBotSpacing.secondaryCTAHeight] (64 dp).
+///
+/// On compact screens buttons are stacked vertically.
+/// On wide screens they are laid out horizontally: [leading] | secondary | primary.
 class KioskBottomActionBar extends StatelessWidget {
   const KioskBottomActionBar({
     required this.primaryLabel,
@@ -107,70 +152,139 @@ class KioskBottomActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final layout = KioskLayoutSpec.of(context);
+    final padding = EdgeInsets.fromLTRB(
+      layout.screenPadding,
+      12,
+      layout.screenPadding,
+      layout.isCompact ? 18 : 26,
+    );
 
     return SafeArea(
-      minimum: EdgeInsets.fromLTRB(
-        layout.screenPadding,
-        10,
-        layout.screenPadding,
-        layout.isCompact ? 16 : 24,
-      ),
+      minimum: padding,
       child: KioskSectionCard(
         padding: EdgeInsets.all(layout.isCompact ? 14 : 16),
         child: layout.isCompact
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
-                children: _actions(context),
+                children: _actionsVertical(context),
               )
             : Row(
-                children: [
-                  if (leading != null) ...[
-                    Expanded(child: leading!),
-                    const SizedBox(width: 16),
-                  ],
-                  if (secondaryLabel != null && onSecondary != null) ...[
-                    OutlinedButton.icon(
-                      onPressed: onSecondary,
-                      icon: Icon(secondaryIcon ?? Icons.arrow_back),
-                      label: Text(secondaryLabel!),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  SizedBox(
-                    width: 300,
-                    child: FilledButton.icon(
-                      onPressed: onPrimary,
-                      icon: Icon(primaryIcon),
-                      label: Text(primaryLabel),
-                    ),
-                  ),
-                ],
+                children: _actionsHorizontal(context),
               ),
       ),
     );
   }
 
-  List<Widget> _actions(BuildContext context) {
+  List<Widget> _actionsVertical(BuildContext context) {
     return [
       if (leading != null) ...[leading!, const SizedBox(height: 12)],
-      FilledButton.icon(
+      _PrimaryButton(
+        label: primaryLabel,
+        icon: primaryIcon,
         onPressed: onPrimary,
-        icon: Icon(primaryIcon),
-        label: Text(primaryLabel),
       ),
       if (secondaryLabel != null && onSecondary != null) ...[
         const SizedBox(height: 10),
-        OutlinedButton.icon(
+        _SecondaryButton(
+          label: secondaryLabel!,
+          icon: secondaryIcon ?? Icons.arrow_back,
           onPressed: onSecondary,
-          icon: Icon(secondaryIcon ?? Icons.arrow_back),
-          label: Text(secondaryLabel!),
         ),
       ],
     ];
   }
+
+  List<Widget> _actionsHorizontal(BuildContext context) {
+    return [
+      if (leading != null) ...[
+        Expanded(child: leading!),
+        const SizedBox(width: 16),
+      ],
+      if (secondaryLabel != null && onSecondary != null) ...[
+        _SecondaryButton(
+          label: secondaryLabel!,
+          icon: secondaryIcon ?? Icons.arrow_back,
+          onPressed: onSecondary,
+          expand: false,
+        ),
+        const SizedBox(width: 12),
+      ],
+      SizedBox(
+        width: 300,
+        child: _PrimaryButton(
+          label: primaryLabel,
+          icon: primaryIcon,
+          onPressed: onPrimary,
+        ),
+      ),
+    ];
+  }
 }
 
+class _PrimaryButton extends StatelessWidget {
+  const _PrimaryButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 22),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(
+          double.minPositive,
+          IceBotSpacing.primaryCTAHeight,
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryButton extends StatelessWidget {
+  const _SecondaryButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.expand = true,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 22),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(
+          double.minPositive,
+          IceBotSpacing.secondaryCTAHeight,
+        ),
+      ),
+    );
+    if (!expand) return btn;
+    return SizedBox(width: double.infinity, child: btn);
+  }
+}
+
+// ─── KioskLoadingPanel ────────────────────────────────────────────────────────
+
+/// Full-screen centred loading panel — Frost-Tech reskin.
+///
+/// Uses [BotLoadingIndicator] instead of the generic linear progress bar.
 class KioskLoadingPanel extends StatelessWidget {
   const KioskLoadingPanel({
     required this.title,
@@ -185,8 +299,10 @@ class KioskLoadingPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final layout = KioskLayoutSpec.of(context);
+    final iconBoxSize = layout.isCompact ? 108.0 : 128.0;
+    final iconSize = layout.isCompact ? 64.0 : 78.0;
 
     return Center(
       child: ConstrainedBox(
@@ -195,27 +311,26 @@ class KioskLoadingPanel extends StatelessWidget {
           padding: EdgeInsets.all(layout.screenPadding),
           child: KioskSectionCard(
             padding: EdgeInsets.symmetric(
-              horizontal: layout.isCompact ? 26 : 48,
-              vertical: layout.isCompact ? 34 : 52,
+              horizontal: layout.isCompact ? 28 : 52,
+              vertical: layout.isCompact ? 36 : 56,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Icon container
                 Container(
-                  width: layout.isCompact ? 108 : 124,
-                  height: layout.isCompact ? 108 : 124,
+                  width: iconBoxSize,
+                  height: iconBoxSize,
                   decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xAAD8E3DF)),
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+                    border: Border.all(
+                      color: IceBotColors.frostBorder,
+                    ),
                   ),
-                  child: Icon(
-                    icon,
-                    size: layout.isCompact ? 66 : 76,
-                    color: colorScheme.onPrimaryContainer,
-                  ),
+                  child: Icon(icon, size: iconSize, color: scheme.primary),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 32),
                 Text(
                   title,
                   textAlign: TextAlign.center,
@@ -223,20 +338,15 @@ class KioskLoadingPanel extends StatelessWidget {
                       ? Theme.of(context).textTheme.displayMedium
                       : Theme.of(context).textTheme.displayLarge,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: layout.isCompact ? 240 : 320,
-                  child: LinearProgressIndicator(
-                    minHeight: 8,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
+                const SizedBox(height: 40),
+                // Branded loading indicator
+                BotLoadingIndicator(size: layout.isCompact ? 44 : 56),
               ],
             ),
           ),
@@ -246,6 +356,9 @@ class KioskLoadingPanel extends StatelessWidget {
   }
 }
 
+// ─── KioskEmptyState ──────────────────────────────────────────────────────────
+
+/// Full-screen empty-state panel — Frost-Tech reskin.
 class KioskEmptyState extends StatelessWidget {
   const KioskEmptyState({
     required this.title,
@@ -264,8 +377,10 @@ class KioskEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final layout = KioskLayoutSpec.of(context);
+    final iconBoxSize = layout.isCompact ? 104.0 : 120.0;
+    final iconSize = layout.isCompact ? 58.0 : 70.0;
 
     return Center(
       child: ConstrainedBox(
@@ -273,42 +388,44 @@ class KioskEmptyState extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(layout.screenPadding),
           child: KioskSectionCard(
-            padding: EdgeInsets.all(layout.isCompact ? 28 : 40),
+            padding: EdgeInsets.all(layout.isCompact ? 28 : 44),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: layout.isCompact ? 104 : 116,
-                  height: layout.isCompact ? 104 : 116,
+                  width: iconBoxSize,
+                  height: iconBoxSize,
                   decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xAAD8E3DF)),
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+                    border: Border.all(color: IceBotColors.frostBorder),
                   ),
-                  child: Icon(
-                    icon,
-                    color: colorScheme.onPrimaryContainer,
-                    size: layout.isCompact ? 58 : 66,
-                  ),
+                  child: Icon(icon, color: scheme.primary, size: iconSize),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 Text(
                   title,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.displayMedium,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Text(
                   message,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 if (actionLabel != null && onAction != null) ...[
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 32),
                   FilledButton.icon(
                     onPressed: onAction,
-                    icon: const Icon(Icons.touch_app_outlined),
+                    icon: const Icon(Icons.touch_app_outlined, size: 22),
                     label: Text(actionLabel!),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(
+                        double.minPositive,
+                        IceBotSpacing.primaryCTAHeight,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -320,6 +437,11 @@ class KioskEmptyState extends StatelessWidget {
   }
 }
 
+// ─── KioskInfoPill ────────────────────────────────────────────────────────────
+
+/// Compact pill / label chip used for metadata tags (price, prep time, count).
+///
+/// Fully rounded by default ([IceBotSpacing.pillRadius]).
 class KioskInfoPill extends StatelessWidget {
   const KioskInfoPill({
     required this.label,
@@ -336,30 +458,27 @@ class KioskInfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final background = backgroundColor ?? colorScheme.primaryContainer;
-    final foreground = foregroundColor ?? colorScheme.onPrimaryContainer;
+    final scheme = Theme.of(context).colorScheme;
+    final bg = backgroundColor ?? scheme.primaryContainer;
+    final fg = foregroundColor ?? scheme.onPrimaryContainer;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: foreground.withValues(alpha: 0.12)),
+        color: bg,
+        borderRadius: BorderRadius.circular(IceBotSpacing.pillRadius),
+        border: Border.all(color: fg.withValues(alpha: 0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, color: foreground, size: 22),
-            const SizedBox(width: 8),
+            Icon(icon, color: fg, size: 20),
+            const SizedBox(width: 7),
           ],
           Text(
             label,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w800,
-            ),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(color: fg),
           ),
         ],
       ),
