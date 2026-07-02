@@ -1,17 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
+import 'package:icebot_kiosk/config/themes/icebot_colors.dart';
+import 'package:icebot_kiosk/config/themes/icebot_spacing.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/status/kiosk_status_presenter.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/bot_loading_indicator.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/bot_step_rail.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/payment_qr_panel.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({required this.orderId, super.key});
@@ -61,8 +64,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final session = controller.activePaymentSession;
     final now = DateTime.now();
     final expiredBySession = session?.isExpiredAt(now) == true;
-    final expiredByTimeout =
-        _startedAt != null && now.difference(_startedAt!) > _pollTimeout;
+    final expiredByTimeout = _startedAt != null && now.difference(_startedAt!) > _pollTimeout;
 
     if (expiredBySession || expiredByTimeout) {
       setState(() {
@@ -128,128 +130,178 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     if (order == null || session == null || order.id != widget.orderId) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Thanh toán QR')),
-        body: KioskEmptyState(
-          title: 'Chưa có phiên thanh toán',
-          message: 'Vui lòng tạo đơn hàng từ giỏ hàng trước khi thanh toán.',
-          icon: Icons.qr_code_2_outlined,
-          actionLabel: 'Về menu',
-          onAction: () => context.go(AppRouter.menu),
+        body: SafeArea(
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(28, 20, 28, 12),
+                child: BotStepRail(currentStep: 2),
+              ),
+              Expanded(
+                child: KioskEmptyState(
+                  title: 'Chưa có phiên thanh toán',
+                  message: 'Vui lòng tạo đơn hàng từ giỏ hàng trước khi thanh toán.',
+                  icon: Icons.qr_code_2_rounded,
+                  actionLabel: 'Về menu',
+                  onAction: () => context.go(AppRouter.menu),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    final colors = Theme.of(context).colorScheme;
     final statusView = KioskStatusPresenter.payment(
       controller.activePaymentStatus,
       order: order,
-      primary: colors.primary,
-      success: const Color(0xFF15803D),
-      warning: const Color(0xFFB45309),
-      danger: colors.error,
+      primary: IceBotColors.icePrimary,
+      success: IceBotColors.mintSuccess,
+      warning: IceBotColors.warningAmber,
+      danger: IceBotColors.dangerRed,
       timedOut: _timedOut,
       expired: _expired,
     );
     final paymentStatus = controller.activePaymentStatus;
+    final canCancel = KioskStatusPresenter.canCancelBeforePaid(order, paymentStatus);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Quét mã để thanh toán'),
-        automaticallyImplyLeading: false,
-      ),
       body: SafeArea(
         child: KioskBackdrop(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final layout = KioskLayoutSpec.of(context);
-              final useWideLayout =
-                  !layout.useSingleColumn && constraints.maxWidth >= 980;
-              final summary = _PaymentSummary(
-                order: order,
-                session: session,
-                statusView: statusView,
-                isPolling: _timer != null,
-                remainingTime: _remainingTime(session.expiresAt),
-                errorMessage:
-                    controller.checkoutError?.message ??
-                    controller.trackingError?.message,
-                canRetryPayment: KioskStatusPresenter.canRetryPaymentSession(
-                  order,
-                  paymentStatus,
-                  expired: _expired,
-                  timedOut: _timedOut,
-                  hasTrackingError: controller.trackingError != null,
+          child: Column(
+            children: [
+              // Header section
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 28, 12),
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 12),
+                      child: BotStepRail(currentStep: 2),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        if (canCancel)
+                          IconButton(
+                            iconSize: 32,
+                            onPressed: controller.isCancellingOrder
+                                ? null
+                                : () async {
+                                    _stopPolling();
+                                    final cancelled = await controller.cancelActiveOrder();
+                                    await controller.refreshPaymentStatus(widget.orderId);
+                                    if (mounted && cancelled == null) {
+                                      _startPolling();
+                                    }
+                                  },
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            color: IceBotColors.botNavy,
+                            tooltip: 'Hủy đơn hàng và quay lại',
+                          )
+                        else
+                          const SizedBox(width: 48), // Padding equivalent to icon button
+                        const SizedBox(width: 8),
+                        Text(
+                          'Thanh toán',
+                          style: Theme.of(context).textTheme.displayMedium,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                canRetryStatus: _pollPausedForError,
-                isRetryingPayment: controller.isCheckingOut,
-                canCancel: KioskStatusPresenter.canCancelBeforePaid(
-                  order,
-                  controller.activePaymentStatus,
-                ),
-                canResetSession: controller.canResetKioskSession,
-                isCancelling: controller.isCancellingOrder,
-                onCancel: () async {
-                  _stopPolling();
-                  final cancelled = await controller.cancelActiveOrder();
-                  await controller.refreshPaymentStatus(widget.orderId);
-                  if (mounted && cancelled == null) {
-                    _startPolling();
-                  }
-                },
-                onRetryStatus: () async {
-                  setState(() {
-                    _pollPausedForError = false;
-                    _startedAt = DateTime.now();
-                  });
-                  _startPolling();
-                },
-                onRetryPayment: () async {
-                  _stopPolling();
-                  final result = await controller.retryPaymentSession();
-                  if (!mounted) {
-                    return;
-                  }
-                  if (result != null) {
-                    setState(() {
-                      _timedOut = false;
-                      _expired = false;
-                      _pollPausedForError = false;
-                      _startedAt = DateTime.now();
-                    });
-                    _startPolling();
-                  }
-                },
-                onResetSession: () async {
-                  _stopPolling();
-                  final reset = await controller.resetKioskSession();
-                  if (context.mounted && reset) {
-                    context.go(AppRouter.menu);
-                  }
-                },
-              );
-              final qrPanel = _QrPayloadPanel(session: session);
-
-              return Padding(
-                padding: EdgeInsets.all(layout.screenPadding),
-                child: useWideLayout
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(flex: 5, child: summary),
-                          const SizedBox(width: 28),
-                          Expanded(flex: 6, child: qrPanel),
-                        ],
-                      )
-                    : ListView(
-                        children: [
-                          summary,
-                          SizedBox(height: layout.sectionGap),
-                          qrPanel,
-                          SizedBox(height: layout.bottomOverlayPadding),
-                        ],
+              ),
+              const Divider(height: 1),
+              // Content section
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final layout = KioskLayoutSpec.of(context);
+                    final useWideLayout = !layout.useSingleColumn && constraints.maxWidth >= 980;
+                    final summary = _PaymentSummary(
+                      order: order,
+                      session: session,
+                      statusView: statusView,
+                      isPolling: _timer != null,
+                      remainingTime: _remainingTime(session.expiresAt),
+                      errorMessage: controller.checkoutError?.message ?? controller.trackingError?.message,
+                      canRetryPayment: KioskStatusPresenter.canRetryPaymentSession(
+                        order,
+                        paymentStatus,
+                        expired: _expired,
+                        timedOut: _timedOut,
+                        hasTrackingError: controller.trackingError != null,
                       ),
-              );
-            },
+                      canRetryStatus: _pollPausedForError,
+                      isRetryingPayment: controller.isCheckingOut,
+                      canCancel: canCancel,
+                      canResetSession: controller.canResetKioskSession,
+                      isCancelling: controller.isCancellingOrder,
+                      onCancel: () async {
+                        _stopPolling();
+                        final cancelled = await controller.cancelActiveOrder();
+                        await controller.refreshPaymentStatus(widget.orderId);
+                        if (mounted && cancelled == null) {
+                          _startPolling();
+                        }
+                      },
+                      onRetryStatus: () async {
+                        setState(() {
+                          _pollPausedForError = false;
+                          _startedAt = DateTime.now();
+                        });
+                        _startPolling();
+                      },
+                      onRetryPayment: () async {
+                        _stopPolling();
+                        final result = await controller.retryPaymentSession();
+                        if (!mounted) {
+                          return;
+                        }
+                        if (result != null) {
+                          setState(() {
+                            _timedOut = false;
+                            _expired = false;
+                            _pollPausedForError = false;
+                            _startedAt = DateTime.now();
+                          });
+                          _startPolling();
+                        }
+                      },
+                      onResetSession: () async {
+                        _stopPolling();
+                        final reset = await controller.resetKioskSession();
+                        if (context.mounted && reset) {
+                          context.go(AppRouter.menu);
+                        }
+                      },
+                    );
+                    final qrPanel = PaymentQrPanel(session: session);
+
+                    return Padding(
+                      padding: EdgeInsets.all(layout.screenPadding),
+                      child: useWideLayout
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(flex: 5, child: summary),
+                                const SizedBox(width: 28),
+                                Expanded(flex: 6, child: qrPanel),
+                              ],
+                            )
+                          : ListView(
+                              padding: EdgeInsets.only(bottom: layout.bottomOverlayPadding),
+                              children: [
+                                summary,
+                                SizedBox(height: layout.sectionGap),
+                                qrPanel,
+                              ],
+                            ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -263,7 +315,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     final remaining = expiresAt.difference(DateTime.now());
     if (remaining <= Duration.zero) {
-      return 'Đã hết hạn';
+      return 'Mã thanh toán đã hết hạn';
     }
 
     final minutes = remaining.inMinutes;
@@ -314,99 +366,123 @@ class _PaymentSummary extends StatelessWidget {
     final layout = KioskLayoutSpec.of(context);
 
     return KioskSectionCard(
-      padding: EdgeInsets.all(layout.isCompact ? 22 : 30),
+      padding: EdgeInsets.all(layout.isCompact ? 24 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(statusView.icon, color: statusView.color, size: 84),
-          const SizedBox(height: 18),
-          Text(
-            statusView.title,
-            style: Theme.of(
-              context,
-            ).textTheme.displayMedium?.copyWith(color: statusView.color),
+          Row(
+            children: [
+              Icon(statusView.icon, color: statusView.color, size: 48),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  statusView.title,
+                  style: Theme.of(context).textTheme.displayMedium?.copyWith(color: statusView.color),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
             statusView.message,
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Text(
             'Số tiền cần thanh toán',
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
             KioskFormatters.money(session.amount, currency: session.currency),
             style: Theme.of(context).textTheme.displayLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+                  color: IceBotColors.icePrimary,
+                ),
           ),
-          const SizedBox(height: 22),
-          _InfoRow(label: 'Mã đơn', value: order.orderNumber),
+          const SizedBox(height: 32),
+          _InfoRow(label: 'Mã đơn hàng', value: order.orderNumber),
           _InfoRow(
             label: 'Nhà cung cấp',
-            value: session.provider.isEmpty
-                ? 'Đang cập nhật'
-                : session.provider,
+            value: session.provider.isEmpty ? 'Đang cập nhật' : session.provider,
           ),
-          _InfoRow(
-            label: 'Hết hạn',
-            value: KioskFormatters.shortDateTime(session.expiresAt),
-          ),
-          if (remainingTime != null)
-            _InfoRow(label: 'Thời gian còn lại', value: remainingTime!),
+          if (remainingTime != null) _InfoRow(label: 'Thời gian chờ mã', value: remainingTime!),
           if (AppConfig.demoMode) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 16),
             const _DemoPaymentSummaryNotice(),
           ],
           if (isPolling) ...[
+            const SizedBox(height: 24),
+            Text(
+              'Đang chờ xác nhận thanh toán...',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: IceBotColors.botNavyMuted),
+            ),
             const SizedBox(height: 12),
-            const LinearProgressIndicator(minHeight: 6),
+            const BotBeamScanner(),
           ],
           if (errorMessage != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _InlineWarning(message: errorMessage!),
           ],
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           if (canRetryStatus) ...[
-            FilledButton.icon(
-              onPressed: onRetryStatus,
-              icon: const Icon(Icons.sync),
-              label: const Text('Kiểm tra lại thanh toán'),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (canRetryPayment) ...[
-            FilledButton.icon(
-              onPressed: isRetryingPayment ? null : onRetryPayment,
-              icon: isRetryingPayment
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 3),
-                    )
-                  : const Icon(Icons.refresh),
-              label: Text(
-                isRetryingPayment
-                    ? 'Đang tạo lại mã...'
-                    : 'Tạo lại mã thanh toán',
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onRetryStatus,
+                icon: const Icon(Icons.sync_rounded),
+                label: const Text('Kiểm tra lại thanh toán'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+          ],
+          if (canRetryPayment) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: isRetryingPayment ? null : onRetryPayment,
+                icon: isRetryingPayment
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 3),
+                      )
+                    : const Icon(Icons.refresh_rounded),
+                label: Text(isRetryingPayment ? 'Đang tạo lại mã...' : 'Tạo lại mã thanh toán'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
           if (canCancel)
-            OutlinedButton.icon(
-              onPressed: isCancelling ? null : onCancel,
-              icon: const Icon(Icons.cancel_outlined),
-              label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: isCancelling ? null : onCancel,
+                icon: const Icon(Icons.cancel_outlined),
+                label: Text(isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: IceBotColors.dangerRed,
+                  side: const BorderSide(color: IceBotColors.dangerRed),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                ),
+              ),
             )
           else if (canResetSession)
-            OutlinedButton.icon(
-              onPressed: onResetSession,
-              icon: const Icon(Icons.home_outlined),
-              label: const Text('Về menu'),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onResetSession,
+                icon: const Icon(Icons.home_outlined),
+                label: const Text('Về menu chính'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                ),
+              ),
             ),
         ],
       ),
@@ -421,18 +497,18 @@ class _DemoPaymentSummaryNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(8),
+        color: IceBotColors.warningContainer,
+        borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
         border: Border.all(color: const Color(0xFFF59E0B)),
       ),
       child: Text(
-        'Chế độ demo: không dùng để thanh toán thật.',
+        'Chế độ demo: không dùng để thanh toán thật.\nVui lòng liên hệ nhân viên nếu cần hỗ trợ.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: const Color(0xFF92400E),
-          fontWeight: FontWeight.w800,
-        ),
+              color: IceBotColors.warningAmber,
+              fontWeight: FontWeight.w800,
+            ),
       ),
     );
   }
@@ -446,163 +522,27 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).colorScheme.error),
+        color: IceBotColors.dangerContainer,
+        borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+        border: Border.all(color: IceBotColors.dangerRed.withValues(alpha: 0.35)),
       ),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onErrorContainer,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _QrPayloadPanel extends StatelessWidget {
-  const _QrPayloadPanel({required this.session});
-
-  final PaymentSessionResult session;
-
-  @override
-  Widget build(BuildContext context) {
-    final payload = session.qrCodePayload?.trim();
-    final checkoutUrl = session.hasUsableCheckoutUrl
-        ? session.checkoutUrl!.trim()
-        : null;
-    final layout = KioskLayoutSpec.of(context);
-
-    return KioskSectionCard(
-      padding: EdgeInsets.all(layout.isCompact ? 22 : 30),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Nội dung thanh toán',
-            style: Theme.of(context).textTheme.displayMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã. Nếu chưa có ảnh QR, hãy dùng nội dung thanh toán hoặc mở trang thanh toán.',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
-          const SizedBox(height: 20),
-          Container(
-            constraints: BoxConstraints(
-              minHeight: layout.isCompact ? 260 : 320,
-            ),
-            padding: EdgeInsets.all(layout.isCompact ? 18 : 24),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFD8E3DF)),
-            ),
-            child: payload == null || payload.isEmpty
-                ? Center(
-                    child: Text(
-                      'Chưa có nội dung QR. Vui lòng mở trang thanh toán nếu có.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Icon(
-                        Icons.qr_code_2_outlined,
-                        size: layout.isCompact ? 82 : 104,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        'Nội dung thanh toán',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onPrimaryContainer,
-                            ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 150,
-                        child: SingleChildScrollView(
-                          child: SelectableText(
-                            payload,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ),
-                      ),
-                    ],
+          Icon(Icons.error_outline_rounded, color: IceBotColors.dangerRed),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: IceBotColors.dangerRed,
+                    fontWeight: FontWeight.w700,
                   ),
-          ),
-          if (AppConfig.demoMode) ...[
-            const SizedBox(height: 14),
-            _DemoQrNotice(),
-          ],
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: payload == null || payload.isEmpty
-                ? null
-                : () async {
-                    await Clipboard.setData(ClipboardData(text: payload));
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Đã sao chép nội dung thanh toán'),
-                        ),
-                      );
-                    }
-                  },
-            icon: const Icon(Icons.copy),
-            label: const Text('Sao chép nội dung thanh toán'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: checkoutUrl == null || checkoutUrl.isEmpty
-                ? null
-                : () => launchUrl(
-                    Uri.parse(checkoutUrl),
-                    mode: LaunchMode.externalApplication,
-                  ),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Mở trang thanh toán'),
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _DemoQrNotice extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFF59E0B)),
-      ),
-      child: Text(
-        'QR demo - không dùng để thanh toán thật. '
-        'Màn hình này chỉ phục vụ review giao diện TOMKO.',
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: const Color(0xFF92400E),
-          fontWeight: FontWeight.w800,
-        ),
       ),
     );
   }
@@ -617,13 +557,18 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.headlineMedium),
+          Text(label, style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: IceBotColors.botNavy,
+                ),
+          ),
         ],
       ),
     );
