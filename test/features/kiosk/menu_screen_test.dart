@@ -81,7 +81,9 @@ Future<void> _pumpMenu(WidgetTester tester, {required Object response, String? k
       home: KioskScope(controller: controller, child: const MenuScreen()),
     ),
   );
-  await tester.pumpAndSettle();
+  // Replaced pumpAndSettle with standard pumps because BotStepRail has infinite animations
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
 }
 
 RuntimeMenuResult _emptyMenu() {
