@@ -6,6 +6,7 @@ import 'package:icebot_kiosk/features/kiosk/data/repositories/demo_kiosk_reposit
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/cart_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
 
 void main() {
   testWidgets('compact cart does not overflow and keeps quantity actions', (
@@ -42,6 +43,12 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Tiếp tục thanh toán'), findsOneWidget);
+    expect(
+      find.text(
+        KioskFormatters.money(controller.cartLines.first.item.finalPrice),
+      ),
+      findsNWidgets(2),
+    );
 
     await tester.tap(find.byIcon(Icons.add_rounded));
     await tester.pump();

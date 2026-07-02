@@ -34,7 +34,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         body: SafeArea(
           child: KioskEmptyState(
             title: 'Món này không còn trong menu',
-            message: 'Menu có thể vừa được cập nhật. Vui lòng quay lại menu để chọn món khác.',
+            message:
+                'Menu có thể vừa được cập nhật. Vui lòng quay lại menu để chọn món khác.',
             icon: Icons.search_off_outlined,
             actionLabel: 'Về menu',
             onAction: () => context.go(AppRouter.menu),
@@ -69,9 +70,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               color: IceBotColors.botNavy,
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              'Chi tiết món',
-                              style: Theme.of(context).textTheme.displayMedium,
+                            Expanded(
+                              child: Text(
+                                'Chi tiết món',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.displayMedium,
+                              ),
                             ),
                           ],
                         ),
@@ -84,12 +91,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final layout = KioskLayoutSpec.of(context);
-                        final useWideLayout = !layout.useSingleColumn && constraints.maxWidth >= 900;
+                        final useWideLayout =
+                            !layout.useSingleColumn &&
+                            constraints.maxWidth >= 900;
                         final info = _ProductInfo(
                           item: item,
-                          containsMachineRuntimeState: controller.menu?.containsMachineRuntimeState == true,
+                          containsMachineRuntimeState:
+                              controller.menu?.containsMachineRuntimeState ==
+                              true,
                           quantity: _quantity,
-                          onDecrease: _quantity <= 1 ? null : () => setState(() => _quantity -= 1),
+                          onDecrease: _quantity <= 1
+                              ? null
+                              : () => setState(() => _quantity -= 1),
                           onIncrease: () => setState(() => _quantity += 1),
                         );
 
@@ -97,9 +110,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           padding: EdgeInsets.all(layout.screenPadding),
                           child: useWideLayout
                               ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    Expanded(flex: 5, child: _ProductImage(item: item)),
+                                    Expanded(
+                                      flex: 5,
+                                      child: _ProductImage(item: item),
+                                    ),
                                     const SizedBox(width: 32),
                                     Expanded(flex: 5, child: info),
                                   ],
@@ -112,7 +129,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     ),
                                     SizedBox(height: layout.sectionGap),
                                     info,
-                                    SizedBox(height: layout.bottomOverlayPadding),
+                                    SizedBox(
+                                      height: layout.bottomOverlayPadding,
+                                    ),
                                   ],
                                 ),
                         );
@@ -124,10 +143,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               // Floating Cart Badge
               Positioned(
                 right: 28,
-                bottom: 32 + IceBotSpacing.primaryCTAHeight + 40, // Above the bottom bar
+                bottom:
+                    32 +
+                    IceBotSpacing.primaryCTAHeight +
+                    40, // Above the bottom bar
                 child: FloatingCartBadge(
                   itemCount: controller.cartItemCount,
-                  totalPriceFormatted: KioskFormatters.money(controller.cartTotal),
+                  totalPriceFormatted: KioskFormatters.money(
+                    controller.cartTotal,
+                  ),
                   onTap: () => context.go(AppRouter.cart),
                 ),
               ),
@@ -156,14 +180,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         onSecondary: () => context.go(AppRouter.menu),
         leading: Text(
           'Tạm tính: ${KioskFormatters.money(item.finalPrice * _quantity, currency: item.currency)}',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
       ),
     );
   }
 
   double _portraitImageHeight(KioskLayoutSpec layout) {
-    if (layout.isCompact) return 280;
+    if (layout.isCompact) return 210;
     if (layout.isTallKiosk) return 560; // 55-60% size
     return 360;
   }
@@ -187,23 +213,27 @@ class _ProductImage extends StatelessWidget {
                 border: Border.all(color: IceBotColors.frostBorder),
                 borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
               ),
-              child: Center(
-                child: Icon(
-                  Icons.icecream_outlined,
-                  size: 150,
-                  color: colorScheme.onPrimaryContainer,
+              child: LayoutBuilder(
+                builder: (context, constraints) => Center(
+                  child: Icon(
+                    Icons.icecream_outlined,
+                    size: constraints.maxHeight < 260 ? 96 : 150,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
             )
           : CachedNetworkImage(
               imageUrl: item.imageUrl!,
               fit: BoxFit.cover,
-              errorWidget: (context, url, error) => Container(
-                color: colorScheme.primaryContainer,
-                child: Icon(
-                  Icons.icecream_outlined,
-                  size: 140,
-                  color: colorScheme.onPrimaryContainer,
+              errorWidget: (context, url, error) => LayoutBuilder(
+                builder: (context, constraints) => Container(
+                  color: colorScheme.primaryContainer,
+                  child: Icon(
+                    Icons.icecream_outlined,
+                    size: constraints.maxHeight < 260 ? 96 : 140,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
             ),
@@ -243,23 +273,30 @@ class _ProductInfo extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              item.description?.isNotEmpty == true ? item.description! : 'Kem tươi tự động IceBot.',
+              item.description?.isNotEmpty == true
+                  ? item.description!
+                  : 'Kem tươi tự động IceBot.',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 24),
             Text(
               KioskFormatters.money(item.finalPrice, currency: item.currency),
-              style: Theme.of(context).textTheme.displayMedium?.copyWith(color: colorScheme.primary),
+              style: Theme.of(
+                context,
+              ).textTheme.displayMedium?.copyWith(color: colorScheme.primary),
             ),
             const SizedBox(height: 14),
             Wrap(
               spacing: 12,
               runSpacing: 12,
               children: [
-                if (item.preparationTimeSeconds != null && item.preparationTimeSeconds! > 0)
+                if (item.preparationTimeSeconds != null &&
+                    item.preparationTimeSeconds! > 0)
                   KioskInfoPill(
                     icon: Icons.timer_outlined,
-                    label: KioskFormatters.durationSeconds(item.preparationTimeSeconds),
+                    label: KioskFormatters.durationSeconds(
+                      item.preparationTimeSeconds,
+                    ),
                     backgroundColor: const Color(0xFFFFF7ED),
                     foregroundColor: const Color(0xFF8A5200),
                   ),
@@ -308,15 +345,18 @@ class _RuntimeAvailabilityNotice extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Theme.of(context).colorScheme.onPrimaryContainer),
+          Icon(
+            Icons.info_outline,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               'Tình trạng món sẽ được xác nhận khi tạo đơn.',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

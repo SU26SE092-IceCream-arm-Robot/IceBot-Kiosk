@@ -168,22 +168,29 @@ class _StorefrontHeader extends StatelessWidget {
         final compact = constraints.maxWidth < 560;
         final copy = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Kem robot sẵn sàng phục vụ',
-              style: Theme.of(context).textTheme.displayMedium,
+              style: compact
+                  ? Theme.of(context).textTheme.headlineMedium
+                  : Theme.of(context).textTheme.displayMedium,
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: compact ? 4 : 8),
             Text(
               'Chọn món, quét QR và nhận kem trong vài bước.',
-              style: Theme.of(context).textTheme.bodyLarge,
+              maxLines: compact ? 2 : null,
+              overflow: compact ? TextOverflow.ellipsis : null,
+              style: compact
+                  ? Theme.of(context).textTheme.bodyMedium
+                  : Theme.of(context).textTheme.bodyLarge,
             ),
           ],
         );
 
         return Container(
           width: double.infinity,
-          padding: EdgeInsets.all(compact ? 20 : 24),
+          padding: EdgeInsets.all(compact ? 14 : 24),
           decoration: BoxDecoration(
             color: colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(20),
@@ -192,12 +199,15 @@ class _StorefrontHeader extends StatelessWidget {
             ),
           ),
           child: compact
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ? Row(
                   children: [
-                    _StorefrontBrandRow(colorScheme: colorScheme),
-                    const SizedBox(height: 18),
-                    copy,
+                    _StorefrontIcon(colorScheme: colorScheme, compact: true),
+                    const SizedBox(width: 12),
+                    Expanded(child: copy),
+                    if (AppConfig.demoMode) ...[
+                      const SizedBox(width: 8),
+                      const _DemoPill(),
+                    ],
                   ],
                 )
               : Row(
@@ -217,47 +227,26 @@ class _StorefrontHeader extends StatelessWidget {
   }
 }
 
-class _StorefrontBrandRow extends StatelessWidget {
-  const _StorefrontBrandRow({required this.colorScheme});
-
-  final ColorScheme colorScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _StorefrontIcon(colorScheme: colorScheme),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            'ICEBOT KIOSK',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        if (AppConfig.demoMode) const _DemoPill(),
-      ],
-    );
-  }
-}
-
 class _StorefrontIcon extends StatelessWidget {
-  const _StorefrontIcon({required this.colorScheme});
+  const _StorefrontIcon({required this.colorScheme, this.compact = false});
 
   final ColorScheme colorScheme;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 52,
-      height: 52,
+      width: compact ? 44 : 52,
+      height: compact ? 44 : 52,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(Icons.icecream_rounded, color: colorScheme.primary, size: 30),
+      child: Icon(
+        Icons.icecream_rounded,
+        color: colorScheme.primary,
+        size: compact ? 26 : 30,
+      ),
     );
   }
 }

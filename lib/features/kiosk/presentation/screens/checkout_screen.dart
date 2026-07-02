@@ -75,9 +75,13 @@ class CheckoutScreen extends StatelessWidget {
                           color: IceBotColors.botNavy,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'Xác nhận đơn hàng',
-                          style: Theme.of(context).textTheme.displayMedium,
+                        Expanded(
+                          child: Text(
+                            'Xác nhận đơn hàng',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.displayMedium,
+                          ),
                         ),
                       ],
                     ),
@@ -194,19 +198,27 @@ class _CheckoutItems extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.receipt_long_outlined,
-                color: IceBotColors.botNavy,
-                size: 32,
-              ),
-              const SizedBox(width: 16),
-              Text(
-                'Chi tiết đơn hàng',
-                style: Theme.of(context).textTheme.displayMedium,
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) => Row(
+              children: [
+                Icon(
+                  Icons.receipt_long_outlined,
+                  color: IceBotColors.botNavy,
+                  size: 32,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Chi tiết đơn hàng',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: constraints.maxWidth < 380
+                        ? Theme.of(context).textTheme.headlineMedium
+                        : Theme.of(context).textTheme.displayMedium,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -265,13 +277,19 @@ class _CheckoutItems extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Text(
-                      KioskFormatters.money(
-                        line.lineTotal,
-                        currency: line.item.currency,
-                      ),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                    SizedBox(
+                      width: 112,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          KioskFormatters.money(
+                            line.lineTotal,
+                            currency: line.item.currency,
+                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
                       ),
                     ),
                   ],

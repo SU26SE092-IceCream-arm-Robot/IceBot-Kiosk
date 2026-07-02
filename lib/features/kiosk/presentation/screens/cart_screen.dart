@@ -206,36 +206,16 @@ class _CartLineTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        QuantityStepperLarge(
-                          quantity: line.quantity,
-                          onDecrease: () =>
-                              controller.decreaseQuantity(line.item.menuItemId),
-                          onIncrease: () =>
-                              controller.increaseQuantity(line.item.menuItemId),
-                          minQuantity: 1,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              KioskFormatters.money(
-                                line.lineTotal,
-                                currency: line.item.currency,
-                              ),
-                              maxLines: 1,
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(
-                                    color: IceBotColors.icePrimary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: QuantityStepperLarge(
+                        quantity: line.quantity,
+                        onDecrease: () =>
+                            controller.decreaseQuantity(line.item.menuItemId),
+                        onIncrease: () =>
+                            controller.increaseQuantity(line.item.menuItemId),
+                        minQuantity: 1,
+                      ),
                     ),
                   ],
                 )
