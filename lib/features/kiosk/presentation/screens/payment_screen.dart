@@ -64,7 +64,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final session = controller.activePaymentSession;
     final now = DateTime.now();
     final expiredBySession = session?.isExpiredAt(now) == true;
-    final expiredByTimeout = _startedAt != null && now.difference(_startedAt!) > _pollTimeout;
+    final expiredByTimeout =
+        _startedAt != null && now.difference(_startedAt!) > _pollTimeout;
 
     if (expiredBySession || expiredByTimeout) {
       setState(() {
@@ -140,7 +141,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Expanded(
                 child: KioskEmptyState(
                   title: 'Chưa có phiên thanh toán',
-                  message: 'Vui lòng tạo đơn hàng từ giỏ hàng trước khi thanh toán.',
+                  message:
+                      'Vui lòng tạo đơn hàng từ giỏ hàng trước khi thanh toán.',
                   icon: Icons.qr_code_2_rounded,
                   actionLabel: 'Về menu',
                   onAction: () => context.go(AppRouter.menu),
@@ -163,7 +165,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       expired: _expired,
     );
     final paymentStatus = controller.activePaymentStatus;
-    final canCancel = KioskStatusPresenter.canCancelBeforePaid(order, paymentStatus);
+    final canCancel = KioskStatusPresenter.canCancelBeforePaid(
+      order,
+      paymentStatus,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -189,8 +194,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                 ? null
                                 : () async {
                                     _stopPolling();
-                                    final cancelled = await controller.cancelActiveOrder();
-                                    await controller.refreshPaymentStatus(widget.orderId);
+                                    final cancelled = await controller
+                                        .cancelActiveOrder();
+                                    await controller.refreshPaymentStatus(
+                                      widget.orderId,
+                                    );
                                     if (mounted && cancelled == null) {
                                       _startPolling();
                                     }
@@ -200,7 +208,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             tooltip: 'Hủy đơn hàng và quay lại',
                           )
                         else
-                          const SizedBox(width: 48), // Padding equivalent to icon button
+                          const SizedBox(
+                            width: 48,
+                          ), // Padding equivalent to icon button
                         const SizedBox(width: 8),
                         Text(
                           'Thanh toán',
@@ -217,21 +227,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final layout = KioskLayoutSpec.of(context);
-                    final useWideLayout = !layout.useSingleColumn && constraints.maxWidth >= 980;
+                    final useWideLayout =
+                        !layout.useSingleColumn && constraints.maxWidth >= 980;
                     final summary = _PaymentSummary(
                       order: order,
                       session: session,
                       statusView: statusView,
                       isPolling: _timer != null,
                       remainingTime: _remainingTime(session.expiresAt),
-                      errorMessage: controller.checkoutError?.message ?? controller.trackingError?.message,
-                      canRetryPayment: KioskStatusPresenter.canRetryPaymentSession(
-                        order,
-                        paymentStatus,
-                        expired: _expired,
-                        timedOut: _timedOut,
-                        hasTrackingError: controller.trackingError != null,
-                      ),
+                      errorMessage:
+                          controller.checkoutError?.message ??
+                          controller.trackingError?.message,
+                      canRetryPayment:
+                          KioskStatusPresenter.canRetryPaymentSession(
+                            order,
+                            paymentStatus,
+                            expired: _expired,
+                            timedOut: _timedOut,
+                            hasTrackingError: controller.trackingError != null,
+                          ),
                       canRetryStatus: _pollPausedForError,
                       isRetryingPayment: controller.isCheckingOut,
                       canCancel: canCancel,
@@ -276,7 +290,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         }
                       },
                     );
-                    final qrPanel = PaymentQrPanel(session: session);
+                    final qrPanel = PaymentQrPanel(
+                      session: session,
+                      isExpired: _expired,
+                    );
 
                     return Padding(
                       padding: EdgeInsets.all(layout.screenPadding),
@@ -290,7 +307,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               ],
                             )
                           : ListView(
-                              padding: EdgeInsets.only(bottom: layout.bottomOverlayPadding),
+                              padding: EdgeInsets.only(
+                                bottom: layout.bottomOverlayPadding,
+                              ),
                               children: [
                                 summary,
                                 SizedBox(height: layout.sectionGap),
@@ -377,7 +396,9 @@ class _PaymentSummary extends StatelessWidget {
               Expanded(
                 child: Text(
                   statusView.title,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(color: statusView.color),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.displayMedium?.copyWith(color: statusView.color),
                 ),
               ),
             ],
@@ -395,17 +416,20 @@ class _PaymentSummary extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             KioskFormatters.money(session.amount, currency: session.currency),
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                  color: IceBotColors.icePrimary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.displayLarge?.copyWith(color: IceBotColors.icePrimary),
           ),
           const SizedBox(height: 32),
           _InfoRow(label: 'Mã đơn hàng', value: order.orderNumber),
           _InfoRow(
             label: 'Nhà cung cấp',
-            value: session.provider.isEmpty ? 'Đang cập nhật' : session.provider,
+            value: session.provider.isEmpty
+                ? 'Đang cập nhật'
+                : session.provider,
           ),
-          if (remainingTime != null) _InfoRow(label: 'Thời gian chờ mã', value: remainingTime!),
+          if (remainingTime != null)
+            _InfoRow(label: 'Thời gian chờ mã', value: remainingTime!),
           if (AppConfig.demoMode) ...[
             const SizedBox(height: 16),
             const _DemoPaymentSummaryNotice(),
@@ -414,7 +438,9 @@ class _PaymentSummary extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               'Đang chờ xác nhận thanh toán...',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: IceBotColors.botNavyMuted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: IceBotColors.botNavyMuted),
             ),
             const SizedBox(height: 12),
             const BotBeamScanner(),
@@ -450,7 +476,11 @@ class _PaymentSummary extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 3),
                       )
                     : const Icon(Icons.refresh_rounded),
-                label: Text(isRetryingPayment ? 'Đang tạo lại mã...' : 'Tạo lại mã thanh toán'),
+                label: Text(
+                  isRetryingPayment
+                      ? 'Đang tạo lại mã...'
+                      : 'Tạo lại mã thanh toán',
+                ),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                 ),
@@ -506,9 +536,9 @@ class _DemoPaymentSummaryNotice extends StatelessWidget {
       child: Text(
         'Chế độ demo: không dùng để thanh toán thật.\nVui lòng liên hệ nhân viên nếu cần hỗ trợ.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: IceBotColors.warningAmber,
-              fontWeight: FontWeight.w800,
-            ),
+          color: IceBotColors.warningAmber,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -526,7 +556,9 @@ class _InlineWarning extends StatelessWidget {
       decoration: BoxDecoration(
         color: IceBotColors.dangerContainer,
         borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
-        border: Border.all(color: IceBotColors.dangerRed.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: IceBotColors.dangerRed.withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,9 +569,9 @@ class _InlineWarning extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: IceBotColors.dangerRed,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: IceBotColors.dangerRed,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -565,9 +597,9 @@ class _InfoRow extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: IceBotColors.botNavy,
-                ),
+              fontWeight: FontWeight.w800,
+              color: IceBotColors.botNavy,
+            ),
           ),
         ],
       ),

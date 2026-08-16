@@ -53,6 +53,7 @@ class KioskController extends ChangeNotifier {
   _CheckoutIntent? _checkoutIntent;
   OrderResult? _recoverableOrder;
   String? _paymentAttemptIdempotencyKey;
+  String? _orderAccessToken;
   int _nonceSequence = 0;
 
   RuntimeMenuResult? get menu => _menu;
@@ -117,7 +118,20 @@ class KioskController extends ChangeNotifier {
         return null;
       }
 
-      final order = await _orderRepository.getOrder(recovery.orderId);
+      final accessToken = recovery.orderAccessToken?.trim();
+      if (accessToken == null || accessToken.isEmpty) {
+        await _orderRecoveryStore.clear();
+        _recoveryError = const ApiException(
+          type: ApiErrorType.unauthorized,
+          statusCode: 401,
+          message: 'Phiên đơn hàng cũ đã hết hiệu lực. Vui lòng tạo đơn mới.',
+        );
+        return null;
+      }
+      final order = await _orderRepository.getOrder(
+        recovery.orderId,
+        orderAccessToken: accessToken,
+      );
       if (order.id != recovery.orderId || order.kioskId != _kioskId) {
         await _orderRecoveryStore.clear();
         return null;
@@ -128,6 +142,7 @@ class KioskController extends ChangeNotifier {
       }
 
       _activeOrder = order;
+      _orderAccessToken = accessToken;
       _activePaymentSession = null;
       _activePaymentStatus = null;
       _recoverableOrder =
@@ -142,8 +157,17 @@ class KioskController extends ChangeNotifier {
       );
       return order;
     } on ApiException catch (error) {
-      if (error.type == ApiErrorType.notFound) {
+      if (error.type == ApiErrorType.notFound ||
+          error.type == ApiErrorType.unauthorized) {
         await _orderRecoveryStore.clear();
+        _recoveryError = error.type == ApiErrorType.unauthorized
+            ? const ApiException(
+                type: ApiErrorType.unauthorized,
+                statusCode: 401,
+                message:
+                    'Phiên theo dõi đơn hàng đã hết hiệu lực. Vui lòng bắt đầu đơn mới.',
+              )
+            : null;
       } else {
         _recoveryError = error;
       }
@@ -210,7 +234,11 @@ class KioskController extends ChangeNotifier {
     return null;
   }
 
-  bool addToCart(RuntimeMenuItem item, {int quantity = 1}) {
+  bool addToCart(
+    RuntimeMenuItem item, {
+    int quantity = 1,
+    Iterable<String> selectedOptionIds = const [],
+  }) {
     if (quantity <= 0) {
       return false;
     }
@@ -221,9 +249,19 @@ class KioskController extends ChangeNotifier {
     }
 
     final orderableItem = currentMenuItem ?? item;
-    final current = _cartLines[orderableItem.menuItemId];
-    _cartLines[orderableItem.menuItemId] = current == null
-        ? CartLine(item: orderableItem, quantity: quantity)
+    final normalizedOptions = selectedOptionIds.toSet().toList()..sort();
+    if (!_isOptionSelectionValid(orderableItem, normalizedOptions)) {
+      return false;
+    }
+    final lineId = _cartLineId(orderableItem.menuItemId, normalizedOptions);
+    final current = _cartLines[lineId];
+    _cartLines[lineId] = current == null
+        ? CartLine(
+            id: lineId,
+            item: orderableItem,
+            quantity: quantity,
+            selectedOptionIds: normalizedOptions,
+          )
         : current.copyWith(quantity: current.quantity + quantity);
     notifyListeners();
     return true;
@@ -239,15 +277,19 @@ class KioskController extends ChangeNotifier {
         item.menuItemId: item,
     };
 
-    _cartLines.removeWhere(
-      (menuItemId, line) => !currentItems.containsKey(menuItemId),
-    );
+    _cartLines.removeWhere((_, line) {
+      final refreshedItem = currentItems[line.item.menuItemId];
+      return refreshedItem == null ||
+          !_isOptionSelectionValid(refreshedItem, line.selectedOptionIds);
+    });
     for (final entry in _cartLines.entries.toList(growable: false)) {
-      final refreshedItem = currentItems[entry.key];
+      final refreshedItem = currentItems[entry.value.item.menuItemId];
       if (refreshedItem != null) {
         _cartLines[entry.key] = CartLine(
+          id: entry.key,
           item: refreshedItem,
           quantity: entry.value.quantity,
+          selectedOptionIds: entry.value.selectedOptionIds,
         );
       }
     }
@@ -256,32 +298,32 @@ class KioskController extends ChangeNotifier {
     _paymentAttemptIdempotencyKey = null;
   }
 
-  void increaseQuantity(String menuItemId) {
-    final current = _cartLines[menuItemId];
+  void increaseQuantity(String cartLineId) {
+    final current = _cartLines[cartLineId];
     if (current == null) {
       return;
     }
 
-    _cartLines[menuItemId] = current.copyWith(quantity: current.quantity + 1);
+    _cartLines[cartLineId] = current.copyWith(quantity: current.quantity + 1);
     notifyListeners();
   }
 
-  void decreaseQuantity(String menuItemId) {
-    final current = _cartLines[menuItemId];
+  void decreaseQuantity(String cartLineId) {
+    final current = _cartLines[cartLineId];
     if (current == null) {
       return;
     }
 
     if (current.quantity <= 1) {
-      _cartLines.remove(menuItemId);
+      _cartLines.remove(cartLineId);
     } else {
-      _cartLines[menuItemId] = current.copyWith(quantity: current.quantity - 1);
+      _cartLines[cartLineId] = current.copyWith(quantity: current.quantity - 1);
     }
     notifyListeners();
   }
 
-  void removeFromCart(String menuItemId) {
-    if (_cartLines.remove(menuItemId) != null) {
+  void removeFromCart(String cartLineId) {
+    if (_cartLines.remove(cartLineId) != null) {
       notifyListeners();
     }
   }
@@ -373,6 +415,16 @@ class KioskController extends ChangeNotifier {
 
       _activeOrder = order;
       _recoverableOrder = order;
+      final issuedAccessToken = order.orderAccessToken?.trim();
+      if (issuedAccessToken == null || issuedAccessToken.isEmpty) {
+        _checkoutError = const ApiException(
+          type: ApiErrorType.unauthorized,
+          statusCode: 401,
+          message: 'Máy chủ không cấp phiên truy cập cho đơn hàng.',
+        );
+        return null;
+      }
+      _orderAccessToken = issuedAccessToken;
       await _persistOrderRecovery(order);
       notifyListeners();
 
@@ -421,6 +473,13 @@ class KioskController extends ChangeNotifier {
           type: ApiErrorType.conflict,
           statusCode: 409,
           message: 'Một món trong giỏ không còn thuộc menu hiện tại.',
+        );
+      }
+      if (!_isOptionSelectionValid(currentItem, line.selectedOptionIds)) {
+        return const ApiException(
+          type: ApiErrorType.conflict,
+          statusCode: 409,
+          message: 'Tùy chọn của một món đã thay đổi. Vui lòng chọn lại.',
         );
       }
     }
@@ -578,8 +637,11 @@ class KioskController extends ChangeNotifier {
     try {
       final paymentSession = await _paymentRepository.createPaymentSession(
         order.id,
+        orderAccessToken: _requireOrderAccessToken(),
         idempotencyKey: paymentKey,
-        description: 'IceBot ${order.orderNumber}',
+        paymentMethodCode: AppConfig.paymentMethodCode,
+        expectedAmount: order.totalAmount,
+        expectedCurrency: order.currency,
       );
       _validatePaymentSession(paymentSession, order);
 
@@ -617,12 +679,17 @@ class KioskController extends ChangeNotifier {
         runtimeSnapshotId: _menu!.snapshotId,
         runtimeSnapshotGeneratedAt: _menu!.generatedAt,
         clientTotalAmount: cartTotal,
-        items: cartLines
+        items: cartLines.indexed
             .map(
-              (line) => CreateOrderItemRequest(
-                menuItemId: line.item.menuItemId,
-                clientLineId: 'line-${line.item.menuItemId}',
-                quantity: line.quantity,
+              (entry) => CreateOrderItemRequest(
+                menuItemId: entry.$2.item.menuItemId,
+                clientLineId: 'line-${entry.$1 + 1}',
+                quantity: entry.$2.quantity,
+                selectedOptions: entry.$2.selectedOptionIds
+                    .map(
+                      (id) => SelectedProductOptionRequest(productOptionId: id),
+                    )
+                    .toList(growable: false),
               ),
             )
             .toList(growable: false),
@@ -633,10 +700,7 @@ class KioskController extends ChangeNotifier {
   String get _cartFingerprint {
     final parts =
         cartLines
-            .map(
-              (line) =>
-                  '${line.item.menuItemId}:${line.quantity}:${line.item.finalPrice}',
-            )
+            .map((line) => '${line.id}:${line.quantity}:${line.unitPrice}')
             .toList(growable: false)
           ..sort();
     return parts.join('|');
@@ -654,7 +718,10 @@ class KioskController extends ChangeNotifier {
 
     _isRefreshingPaymentStatus = true;
     try {
-      final status = await _orderRepository.getPaymentStatus(orderId);
+      final status = await _orderRepository.getPaymentStatus(
+        orderId,
+        orderAccessToken: _requireOrderAccessToken(),
+      );
       _validatePaymentStatus(status, orderId);
       _activePaymentStatus = status;
       _trackingError = null;
@@ -751,7 +818,10 @@ class KioskController extends ChangeNotifier {
 
     _isRefreshingOrder = true;
     try {
-      final order = await _orderRepository.getOrder(orderId);
+      final order = await _orderRepository.getOrder(
+        orderId,
+        orderAccessToken: _requireOrderAccessToken(),
+      );
       _validateTrackedOrder(order, orderId);
       _activeOrder = order;
       _trackingError = null;
@@ -787,6 +857,7 @@ class KioskController extends ChangeNotifier {
     try {
       final cancelled = await _orderRepository.cancelOrder(
         order.id,
+        orderAccessToken: _requireOrderAccessToken(),
         reason: reason ?? 'Customer cancelled before payment.',
       );
       _activeOrder = cancelled;
@@ -827,6 +898,7 @@ class KioskController extends ChangeNotifier {
     _checkoutIntent = null;
     _recoverableOrder = null;
     _paymentAttemptIdempotencyKey = null;
+    _orderAccessToken = null;
     _activeOrder = null;
     _activePaymentSession = null;
     _activePaymentStatus = null;
@@ -842,10 +914,64 @@ class KioskController extends ChangeNotifier {
     DateTime? paymentExpiresAt,
   }) async {
     try {
-      await _orderRecoveryStore.save(order, paymentExpiresAt: paymentExpiresAt);
+      await _orderRecoveryStore.save(
+        order,
+        orderAccessToken: _orderAccessToken,
+        paymentExpiresAt: paymentExpiresAt,
+      );
     } on Object {
       // Recovery is best-effort and must never block ordering or tracking.
     }
+  }
+
+  String _cartLineId(String menuItemId, Iterable<String> selectedOptionIds) {
+    final options = selectedOptionIds.toList()..sort();
+    return options.isEmpty ? menuItemId : '$menuItemId::${options.join(',')}';
+  }
+
+  bool _isOptionSelectionValid(
+    RuntimeMenuItem item,
+    Iterable<String> selectedOptionIds,
+  ) {
+    final selected = selectedOptionIds.toSet();
+    final knownOptionIds = item.optionGroups
+        .expand((group) => group.options)
+        .map((option) => option.productOptionId)
+        .toSet();
+    if (!knownOptionIds.containsAll(selected)) {
+      return false;
+    }
+
+    for (final group in item.optionGroups) {
+      final groupOptionIds = group.options
+          .map((option) => option.productOptionId)
+          .toSet();
+      final count = selected.where(groupOptionIds.contains).length;
+      final minimum = group.isRequired && group.minSelections < 1
+          ? 1
+          : group.minSelections;
+      final maximum = group.selectionType == RuntimeOptionSelectionType.single
+          ? 1
+          : group.maxSelections;
+      if (group.selectionType == RuntimeOptionSelectionType.unknown ||
+          count < minimum ||
+          count > maximum) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String _requireOrderAccessToken() {
+    final token = _orderAccessToken?.trim();
+    if (token == null || token.isEmpty) {
+      throw const ApiException(
+        type: ApiErrorType.unauthorized,
+        statusCode: 401,
+        message: 'Phiên truy cập đơn hàng không còn hợp lệ.',
+      );
+    }
+    return token;
   }
 
   void _validateTrackedOrder(OrderResult order, String orderId) {
@@ -884,15 +1010,36 @@ class KioskController extends ChangeNotifier {
 }
 
 class CartLine {
-  const CartLine({required this.item, required this.quantity});
+  const CartLine({
+    required this.id,
+    required this.item,
+    required this.quantity,
+    this.selectedOptionIds = const [],
+  });
 
+  final String id;
   final RuntimeMenuItem item;
   final int quantity;
+  final List<String> selectedOptionIds;
 
-  double get lineTotal => item.finalPrice * quantity;
+  double get unitPrice => item.priceForOptions(selectedOptionIds);
+  double get lineTotal => unitPrice * quantity;
+
+  List<RuntimeMenuProductOption> get selectedOptions {
+    final selected = selectedOptionIds.toSet();
+    return item.optionGroups
+        .expand((group) => group.options)
+        .where((option) => selected.contains(option.productOptionId))
+        .toList(growable: false);
+  }
 
   CartLine copyWith({int? quantity}) {
-    return CartLine(item: item, quantity: quantity ?? this.quantity);
+    return CartLine(
+      id: id,
+      item: item,
+      quantity: quantity ?? this.quantity,
+      selectedOptionIds: selectedOptionIds,
+    );
   }
 }
 

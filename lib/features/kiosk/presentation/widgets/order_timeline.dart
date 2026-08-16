@@ -15,7 +15,7 @@ class OrderTimeline extends StatelessWidget {
       'Đã tạo đơn',
       'Đã thanh toán',
       switch (order.status) {
-        OrderStatus.readyForExecution => 'Đang chờ xử lý',
+        OrderStatus.readyForFulfillment => 'Sẵn sàng hoàn tất',
         OrderStatus.accepted => 'Đã nhận đơn',
         _ => 'Robot đang chuẩn bị',
       },
@@ -61,7 +61,7 @@ class OrderTimeline extends StatelessWidget {
     return switch (order.status) {
       OrderStatus.draft || OrderStatus.pendingPayment => 0,
       OrderStatus.paid => 1,
-      OrderStatus.readyForExecution ||
+      OrderStatus.readyForFulfillment ||
       OrderStatus.accepted ||
       OrderStatus.preparing => 2,
       OrderStatus.ready => 3,
@@ -71,6 +71,7 @@ class OrderTimeline extends StatelessWidget {
       OrderStatus.cancelled ||
       OrderStatus.failed ||
       OrderStatus.executionRejected ||
+      OrderStatus.fulfillmentIssue ||
       OrderStatus.refundRequired ||
       OrderStatus.unknown => 0,
     };
@@ -81,6 +82,7 @@ class OrderTimeline extends StatelessWidget {
         order.status == OrderStatus.cancelled ||
         order.status == OrderStatus.failed ||
         order.status == OrderStatus.executionRejected ||
+        order.status == OrderStatus.fulfillmentIssue ||
         order.status == OrderStatus.refundRequired ||
         order.status == OrderStatus.unknown;
   }
@@ -113,18 +115,18 @@ class _TimelineNode extends StatelessWidget {
     final color = isFailed
         ? error
         : isCompleted
-            ? success
-            : isActive
-                ? primary
-                : inactive;
+        ? success
+        : isActive
+        ? primary
+        : inactive;
 
     final bgColor = isFailed
         ? IceBotColors.dangerContainer
         : isCompleted
-            ? IceBotColors.mintSuccessContainer
-            : isActive
-                ? IceBotColors.icePrimaryContainer
-                : Colors.white;
+        ? IceBotColors.mintSuccessContainer
+        : isActive
+        ? IceBotColors.icePrimaryContainer
+        : Colors.white;
 
     Widget nodeContent = Container(
       constraints: const BoxConstraints(minHeight: 72),
@@ -152,9 +154,11 @@ class _TimelineNode extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: (isActive || isFailed || isCompleted) ? color : const Color(0xFF64748B),
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: (isActive || isFailed || isCompleted)
+                    ? color
+                    : const Color(0xFF64748B),
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],

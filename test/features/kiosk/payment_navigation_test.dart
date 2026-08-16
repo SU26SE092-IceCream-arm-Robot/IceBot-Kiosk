@@ -59,7 +59,7 @@ void main() {
 
       expect(find.text('ORDER_TRACKING_TEST'), findsOneWidget);
       expect(find.text('FAKE_SUCCESS_TEST'), findsNothing);
-      expect(controller.activeOrder?.status, OrderStatus.readyForExecution);
+      expect(controller.activeOrder?.status, OrderStatus.readyForFulfillment);
     },
   );
 }
@@ -105,7 +105,10 @@ class _NavigationOrderRepository extends OrderRepository {
   }
 
   @override
-  Future<PaymentStatusResult> getPaymentStatus(String orderId) async {
+  Future<PaymentStatusResult> getPaymentStatus(
+    String orderId, {
+    required String orderAccessToken,
+  }) async {
     return PaymentStatusResult(
       paymentTransactionId: 'payment-id',
       orderId: orderId,
@@ -125,8 +128,11 @@ class _NavigationOrderRepository extends OrderRepository {
   }
 
   @override
-  Future<OrderResult> getOrder(String orderId) async {
-    return _order(OrderStatus.readyForExecution, PaymentStatus.paid);
+  Future<OrderResult> getOrder(
+    String orderId, {
+    required String orderAccessToken,
+  }) async {
+    return _order(OrderStatus.readyForFulfillment, PaymentStatus.paid);
   }
 }
 
@@ -137,8 +143,11 @@ class _NavigationPaymentRepository extends PaymentRepository {
   @override
   Future<PaymentSessionResult> createPaymentSession(
     String orderId, {
-    String? idempotencyKey,
-    String? description,
+    required String orderAccessToken,
+    required String idempotencyKey,
+    required String paymentMethodCode,
+    required double expectedAmount,
+    required String expectedCurrency,
   }) async {
     return PaymentSessionResult(
       paymentTransactionId: 'payment-id',
@@ -172,6 +181,7 @@ OrderResult _order(OrderStatus status, PaymentStatus paymentStatus) {
     customerStatusMessage: '',
     canRetryPayment: status == OrderStatus.pendingPayment,
     requiresStaffSupport: false,
+    orderAccessToken: 'order-access-token-001',
     items: const [],
   );
 }

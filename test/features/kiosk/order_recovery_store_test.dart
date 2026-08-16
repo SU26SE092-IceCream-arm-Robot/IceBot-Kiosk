@@ -10,13 +10,16 @@ void main() {
 
   test('stores and restores only safe active-order recovery fields', () async {
     final preferences = await SharedPreferences.getInstance();
+    final tokenStore = _MemoryOrderAccessTokenStore();
     final store = SharedPreferencesOrderRecoveryStore(
       preferences,
+      tokenStore: tokenStore,
       clock: () => DateTime.utc(2026, 7, 1, 10),
     );
 
     await store.save(
       _order(OrderStatus.preparing),
+      orderAccessToken: 'order-access-token-001',
       paymentExpiresAt: DateTime.utc(2026, 7, 1, 10, 15),
     );
 
@@ -28,11 +31,13 @@ void main() {
     expect(raw, isNot(contains('qrCodePayload')));
     expect(raw, isNot(contains('checkoutUrl')));
     expect(raw, isNot(contains('provider')));
+    expect(raw, isNot(contains('order-access-token-001')));
 
     final restored = await store.read('kiosk-id');
     expect(restored?.orderId, 'order-id');
     expect(restored?.orderStatus, OrderStatus.preparing);
     expect(restored?.paymentStatus, PaymentStatus.paid);
+    expect(restored?.orderAccessToken, 'order-access-token-001');
   });
 
   test('expired recovery is cleared', () async {
@@ -40,10 +45,14 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     final store = SharedPreferencesOrderRecoveryStore(
       preferences,
+      tokenStore: _MemoryOrderAccessTokenStore(),
       clock: () => now,
       retention: const Duration(minutes: 30),
     );
-    await store.save(_order(OrderStatus.accepted));
+    await store.save(
+      _order(OrderStatus.accepted),
+      orderAccessToken: 'order-access-token-001',
+    );
 
     now = now.add(const Duration(minutes: 31));
     expect(await store.read('kiosk-id'), isNull);
@@ -55,8 +64,14 @@ void main() {
 
   test('terminal order clears recovery', () async {
     final preferences = await SharedPreferences.getInstance();
-    final store = SharedPreferencesOrderRecoveryStore(preferences);
-    await store.save(_order(OrderStatus.preparing));
+    final store = SharedPreferencesOrderRecoveryStore(
+      preferences,
+      tokenStore: _MemoryOrderAccessTokenStore(),
+    );
+    await store.save(
+      _order(OrderStatus.preparing),
+      orderAccessToken: 'order-access-token-001',
+    );
 
     await store.save(_order(OrderStatus.completed));
 
@@ -74,6 +89,19 @@ void main() {
 
     expect(await store.read('kiosk-id'), isNull);
   });
+}
+
+class _MemoryOrderAccessTokenStore implements OrderAccessTokenStore {
+  String? value;
+
+  @override
+  Future<void> write(String token) async => value = token;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> clear() async => value = null;
 }
 
 OrderResult _order(OrderStatus status) {

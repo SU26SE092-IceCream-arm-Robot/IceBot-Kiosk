@@ -14,6 +14,7 @@ import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_pan
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/order_timeline.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/order_fulfillment_items.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   const OrderTrackingScreen({required this.orderId, super.key});
@@ -116,7 +117,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = KioskScope.of(context);
-    final order = controller.activeOrder?.id == widget.orderId ? controller.activeOrder : null;
+    final order = controller.activeOrder?.id == widget.orderId
+        ? controller.activeOrder
+        : null;
 
     if (order == null && controller.trackingError != null) {
       return Scaffold(
@@ -153,7 +156,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               Expanded(
                 child: KioskLoadingPanel(
                   title: 'Đang cập nhật đơn hàng',
-                  message: 'IceBot đang kiểm tra trạng thái thanh toán và chuẩn bị món.',
+                  message:
+                      'IceBot đang kiểm tra trạng thái thanh toán và chuẩn bị món.',
                   icon: Icons.receipt_long_outlined,
                 ),
               ),
@@ -205,7 +209,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final layout = KioskLayoutSpec.of(context);
-                    final useWideLayout = !layout.useSingleColumn && constraints.maxWidth >= 980;
+                    final useWideLayout =
+                        !layout.useSingleColumn && constraints.maxWidth >= 980;
                     final statusPanel = _OrderStatusPanel(
                       order: order,
                       statusView: statusView,
@@ -219,7 +224,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         controller.activePaymentStatus,
                       ),
                       isCancelling: controller.isCancellingOrder,
-                      canRetryPayment: order.status == OrderStatus.pendingPayment &&
+                      canRetryPayment:
+                          order.status == OrderStatus.pendingPayment &&
                           controller.activePaymentSession == null &&
                           controller.canRetryPayment,
                       isRetryingPayment: controller.isCheckingOut,
@@ -259,7 +265,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                               ],
                             )
                           : ListView(
-                              padding: EdgeInsets.only(bottom: layout.bottomOverlayPadding),
+                              padding: EdgeInsets.only(
+                                bottom: layout.bottomOverlayPadding,
+                              ),
                               children: [
                                 statusPanel,
                                 SizedBox(height: layout.sectionGap),
@@ -325,12 +333,16 @@ class _OrderStatusPanel extends StatelessWidget {
                   children: [
                     Text(
                       statusView.title,
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(color: statusView.color),
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                        color: statusView.color,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       statusView.message,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: IceBotColors.botNavyMuted),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: IceBotColors.botNavyMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -349,6 +361,10 @@ class _OrderStatusPanel extends StatelessWidget {
           ],
           const SizedBox(height: 32),
           OrderTimeline(order: order),
+          if (order.items.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            OrderFulfillmentItems(items: order.items),
+          ],
           const SizedBox(height: 48),
           const Divider(),
           const SizedBox(height: 24),
@@ -358,22 +374,35 @@ class _OrderStatusPanel extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Mã đơn hàng', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Mã đơn hàng',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     order.orderNumber,
-                    style: Theme.of(context).textTheme.displayMedium?.copyWith(color: IceBotColors.botNavy),
+                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      color: IceBotColors.botNavy,
+                    ),
                   ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Tổng tiền', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Tổng tiền',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   Text(
-                    KioskFormatters.money(order.totalAmount, currency: order.currency),
-                    style: Theme.of(context).textTheme.displayMedium?.copyWith(color: IceBotColors.botNavy),
+                    KioskFormatters.money(
+                      order.totalAmount,
+                      currency: order.currency,
+                    ),
+                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                      color: IceBotColors.botNavy,
+                    ),
                   ),
                 ],
               ),
@@ -397,7 +426,9 @@ class _InlineWarning extends StatelessWidget {
       decoration: BoxDecoration(
         color: IceBotColors.dangerContainer,
         borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
-        border: Border.all(color: IceBotColors.dangerRed.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: IceBotColors.dangerRed.withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,9 +439,9 @@ class _InlineWarning extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: IceBotColors.dangerRed,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: IceBotColors.dangerRed,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -467,7 +498,6 @@ class _OrderActionPanel extends StatelessWidget {
             label: 'Đặt lúc',
             value: KioskFormatters.shortDateTime(order.placedAt),
           ),
-          const Spacer(),
           const SizedBox(height: 32),
           if (canRetryTracking) ...[
             FilledButton.icon(
@@ -491,7 +521,9 @@ class _OrderActionPanel extends StatelessWidget {
                     )
                   : const Icon(Icons.qr_code_2_rounded),
               label: Text(
-                isRetryingPayment ? 'Đang tạo lại mã...' : 'Tạo lại mã thanh toán',
+                isRetryingPayment
+                    ? 'Đang tạo lại mã...'
+                    : 'Tạo lại mã thanh toán',
               ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -532,7 +564,9 @@ class _OrderActionPanel extends StatelessWidget {
                     ? 'Vui lòng nhận món trước khi bắt đầu đơn mới.'
                     : 'Đơn hàng đang được xử lý.\nVui lòng chờ cập nhật tiếp theo.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: IceBotColors.botNavyMuted),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: IceBotColors.botNavyMuted,
+                ),
               ),
             ),
         ],
@@ -558,7 +592,8 @@ class _OrderActionPanel extends StatelessWidget {
       OrderStatus.draft => 'Đang nhập đơn',
       OrderStatus.pendingPayment => 'Đang chờ thanh toán',
       OrderStatus.paid => 'Đã thanh toán',
-      OrderStatus.readyForExecution => 'Đơn đang chờ xử lý',
+      OrderStatus.readyForFulfillment => 'Sẵn sàng hoàn tất đơn',
+      OrderStatus.fulfillmentIssue => 'Cần hỗ trợ hoàn tất đơn',
       OrderStatus.accepted => 'Hệ thống đã nhận đơn',
       OrderStatus.preparing => 'Robot đang chuẩn bị',
       OrderStatus.ready => 'Món đã sẵn sàng',
@@ -591,9 +626,9 @@ class _DetailLine extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: IceBotColors.botNavy,
-                ),
+              fontWeight: FontWeight.w800,
+              color: IceBotColors.botNavy,
+            ),
           ),
         ],
       ),

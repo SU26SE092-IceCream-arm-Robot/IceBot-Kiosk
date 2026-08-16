@@ -242,6 +242,7 @@ class DemoKioskStore {
       customerStatusMessage: _customerStatusMessage(record.orderStatus),
       canRetryPayment: record.orderStatus == OrderStatus.pendingPayment,
       requiresStaffSupport: false,
+      orderAccessToken: _DemoIds.orderAccessToken(record.orderId),
       items: [
         for (var i = 0; i < record.lines.length; i++)
           _buildOrderItem(record.lines[i], i),
@@ -277,9 +278,10 @@ class DemoKioskStore {
     return switch (status) {
       OrderStatus.pendingPayment => 'DemoWaitingForPayment',
       OrderStatus.paid ||
-      OrderStatus.readyForExecution ||
+      OrderStatus.readyForFulfillment ||
       OrderStatus.accepted ||
       OrderStatus.preparing => 'DemoPreparing',
+      OrderStatus.fulfillmentIssue => 'DemoSupportRequired',
       OrderStatus.ready => 'DemoReady',
       OrderStatus.completed => 'DemoCompleted',
       OrderStatus.cancelled => 'DemoCancelled',
@@ -291,9 +293,11 @@ class DemoKioskStore {
     return switch (status) {
       OrderStatus.pendingPayment => 'Demo: đang chờ xác nhận thanh toán.',
       OrderStatus.paid ||
-      OrderStatus.readyForExecution ||
+      OrderStatus.readyForFulfillment ||
       OrderStatus.accepted ||
       OrderStatus.preparing => 'Demo: đang mô phỏng bước chuẩn bị.',
+      OrderStatus.fulfillmentIssue =>
+        'Demo: cần nhân viên kiểm tra quá trình hoàn tất đơn.',
       OrderStatus.ready => 'Demo: đơn đã sẵn sàng để nhận.',
       OrderStatus.completed => 'Demo: luồng khách hàng đã hoàn tất.',
       OrderStatus.cancelled => 'Demo: đơn đã hủy.',
@@ -324,17 +328,27 @@ class DemoOrderRepository extends OrderRepository {
   }
 
   @override
-  Future<OrderResult> getOrder(String orderId) async {
+  Future<OrderResult> getOrder(
+    String orderId, {
+    required String orderAccessToken,
+  }) async {
     return _store.getOrder(orderId);
   }
 
   @override
-  Future<PaymentStatusResult> getPaymentStatus(String orderId) async {
+  Future<PaymentStatusResult> getPaymentStatus(
+    String orderId, {
+    required String orderAccessToken,
+  }) async {
     return _store.getPaymentStatus(orderId);
   }
 
   @override
-  Future<OrderResult> cancelOrder(String orderId, {String? reason}) async {
+  Future<OrderResult> cancelOrder(
+    String orderId, {
+    required String orderAccessToken,
+    String? reason,
+  }) async {
     return _store.cancelOrder(orderId, reason: reason);
   }
 }
@@ -347,8 +361,11 @@ class DemoPaymentRepository extends PaymentRepository {
   @override
   Future<PaymentSessionResult> createPaymentSession(
     String orderId, {
-    String? idempotencyKey,
-    String? description,
+    required String orderAccessToken,
+    required String idempotencyKey,
+    required String paymentMethodCode,
+    required double expectedAmount,
+    required String expectedCurrency,
   }) async {
     return _store.createPaymentSession(orderId);
   }
@@ -490,4 +507,6 @@ class _DemoIds {
   static String paymentTransactionId(String orderId) {
     return orderId.replaceFirst('0000-7000-8000-', '0000-7000-9000-');
   }
+
+  static String orderAccessToken(String orderId) => 'demo-access-$orderId';
 }

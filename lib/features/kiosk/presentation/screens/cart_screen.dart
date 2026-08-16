@@ -199,8 +199,7 @@ class _CartLineTile extends StatelessWidget {
                           iconSize: 32,
                           color: IceBotColors.botNavyMuted,
                           tooltip: 'Xóa món',
-                          onPressed: () =>
-                              controller.removeFromCart(line.item.menuItemId),
+                          onPressed: () => controller.removeFromCart(line.id),
                           icon: const Icon(Icons.close_rounded),
                         ),
                       ],
@@ -210,10 +209,8 @@ class _CartLineTile extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: QuantityStepperLarge(
                         quantity: line.quantity,
-                        onDecrease: () =>
-                            controller.decreaseQuantity(line.item.menuItemId),
-                        onIncrease: () =>
-                            controller.increaseQuantity(line.item.menuItemId),
+                        onDecrease: () => controller.decreaseQuantity(line.id),
+                        onIncrease: () => controller.increaseQuantity(line.id),
                         minQuantity: 1,
                       ),
                     ),
@@ -227,10 +224,8 @@ class _CartLineTile extends StatelessWidget {
                     const SizedBox(width: 16),
                     QuantityStepperLarge(
                       quantity: line.quantity,
-                      onDecrease: () =>
-                          controller.decreaseQuantity(line.item.menuItemId),
-                      onIncrease: () =>
-                          controller.increaseQuantity(line.item.menuItemId),
+                      onDecrease: () => controller.decreaseQuantity(line.id),
+                      onIncrease: () => controller.increaseQuantity(line.id),
                       minQuantity: 1,
                     ),
                     const SizedBox(width: 32),
@@ -254,8 +249,7 @@ class _CartLineTile extends StatelessWidget {
                       iconSize: 32,
                       color: IceBotColors.botNavyMuted,
                       tooltip: 'Xóa món',
-                      onPressed: () =>
-                          controller.removeFromCart(line.item.menuItemId),
+                      onPressed: () => controller.removeFromCart(line.id),
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ],
@@ -308,15 +302,21 @@ class _CartItemTitle extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          KioskFormatters.money(
-            line.item.finalPrice,
-            currency: line.item.currency,
-          ),
+          KioskFormatters.money(line.unitPrice, currency: line.item.currency),
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: IceBotColors.botNavyMuted,
             fontWeight: FontWeight.w600,
           ),
         ),
+        if (line.selectedOptions.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            line.selectedOptions.map((option) => option.name).join(', '),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: IceBotColors.botNavyMuted),
+          ),
+        ],
       ],
     );
   }

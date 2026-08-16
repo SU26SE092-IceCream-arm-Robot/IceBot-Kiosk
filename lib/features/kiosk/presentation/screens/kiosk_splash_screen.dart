@@ -4,6 +4,7 @@ import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/status/runtime_menu_availability_presenter.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_panel.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 
@@ -20,7 +21,7 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_requestedLoad || !AppConfig.hasKioskId) {
+    if (_requestedLoad || AppConfig.runtimeConfigurationError != null) {
       return;
     }
 
@@ -53,6 +54,11 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
       return const _MissingKioskConfigView();
     }
 
+    final configurationError = AppConfig.runtimeConfigurationError;
+    if (configurationError != null) {
+      return _InvalidKioskConfigView(message: configurationError);
+    }
+
     final controller = KioskScope.of(context);
     final recoveryError = controller.recoveryError;
     if (recoveryError != null) {
@@ -61,7 +67,9 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
           child: KioskErrorPanel(
             title: 'Không thể khôi phục đơn hàng',
             error: recoveryError,
-            actionLabel: 'Thử lại',
+            actionLabel: recoveryError.type == ApiErrorType.unauthorized
+                ? 'Bắt đầu đơn mới'
+                : 'Thử lại',
             onAction: _initialize,
           ),
         ),
@@ -70,11 +78,15 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
 
     final menuError = controller.menuError;
     if (menuError != null) {
+      final availability = RuntimeMenuAvailabilityPresenter.fromError(
+        menuError,
+      );
       return Scaffold(
         body: KioskBackdrop(
           child: KioskErrorPanel(
-            title: _errorTitle(menuError),
+            title: availability.title,
             error: menuError,
+            primaryMessage: availability.message,
             actionLabel: 'Thử lại',
             onAction: () => controller.loadMenu(force: true),
           ),
@@ -99,15 +111,24 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
       ),
     );
   }
+}
 
-  String _errorTitle(ApiException error) {
-    return switch (error.type) {
-      ApiErrorType.notFound => 'Không tìm thấy kiosk',
-      ApiErrorType.conflict => 'Kiosk đang tạm ngưng',
-      ApiErrorType.network || ApiErrorType.timeout => 'Không thể kết nối',
-      ApiErrorType.validation => 'Cấu hình kiosk không hợp lệ',
-      _ => 'Không thể tải menu',
-    };
+class _InvalidKioskConfigView extends StatelessWidget {
+  const _InvalidKioskConfigView({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: KioskBackdrop(
+        child: KioskEmptyState(
+          title: 'Cấu hình kiosk không hợp lệ',
+          message: message,
+          icon: Icons.settings_outlined,
+        ),
+      ),
+    );
   }
 }
 

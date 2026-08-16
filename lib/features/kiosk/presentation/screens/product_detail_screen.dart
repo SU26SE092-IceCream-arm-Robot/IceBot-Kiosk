@@ -23,6 +23,108 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   int _quantity = 1;
+  String? _configuredMenuItemId;
+  final Set<String> _selectedOptionIds = {};
+
+  void _initializeOptions(RuntimeMenuItem item) {
+    if (_configuredMenuItemId == item.menuItemId) {
+      return;
+    }
+    _configuredMenuItemId = item.menuItemId;
+    _selectedOptionIds.clear();
+    for (final group in item.optionGroups) {
+      final defaults = group.options.where((option) => option.isDefault);
+      _selectedOptionIds.addAll(
+        defaults.map((option) => option.productOptionId),
+      );
+      final minimum = group.isRequired && group.minSelections < 1
+          ? 1
+          : group.minSelections;
+      final selectedInGroup = group.options
+          .where(
+            (option) => _selectedOptionIds.contains(option.productOptionId),
+          )
+          .length;
+      if (selectedInGroup < minimum) {
+        _selectedOptionIds.addAll(
+          group.options
+              .where(
+                (option) =>
+                    !_selectedOptionIds.contains(option.productOptionId),
+              )
+              .take(minimum - selectedInGroup)
+              .map((option) => option.productOptionId),
+        );
+      }
+    }
+  }
+
+  void _toggleOption(
+    RuntimeMenuOptionGroup group,
+    RuntimeMenuProductOption option,
+  ) {
+    final groupIds = group.options.map((item) => item.productOptionId).toSet();
+    final selectedInGroup = _selectedOptionIds.intersection(groupIds);
+    final isSelected = selectedInGroup.contains(option.productOptionId);
+    final minimum = group.isRequired && group.minSelections < 1
+        ? 1
+        : group.minSelections;
+    final maximum = group.selectionType == RuntimeOptionSelectionType.single
+        ? 1
+        : group.maxSelections;
+
+    if (isSelected && selectedInGroup.length <= minimum) {
+      _showOptionMessage('Nhóm ${group.name} cần ít nhất $minimum lựa chọn.');
+      return;
+    }
+    if (!isSelected &&
+        group.selectionType == RuntimeOptionSelectionType.multiple &&
+        selectedInGroup.length >= maximum) {
+      _showOptionMessage(
+        'Nhóm ${group.name} chỉ cho phép tối đa $maximum lựa chọn.',
+      );
+      return;
+    }
+
+    setState(() {
+      if (group.selectionType == RuntimeOptionSelectionType.single) {
+        _selectedOptionIds.removeAll(groupIds);
+      }
+      if (isSelected) {
+        _selectedOptionIds.remove(option.productOptionId);
+      } else {
+        _selectedOptionIds.add(option.productOptionId);
+      }
+    });
+  }
+
+  String? _selectionError(RuntimeMenuItem item) {
+    for (final group in item.optionGroups) {
+      final groupIds = group.options
+          .map((option) => option.productOptionId)
+          .toSet();
+      final count = _selectedOptionIds.intersection(groupIds).length;
+      final minimum = group.isRequired && group.minSelections < 1
+          ? 1
+          : group.minSelections;
+      final maximum = group.selectionType == RuntimeOptionSelectionType.single
+          ? 1
+          : group.maxSelections;
+      if (group.selectionType == RuntimeOptionSelectionType.unknown) {
+        return 'Nhóm ${group.name} có kiểu lựa chọn chưa được hỗ trợ.';
+      }
+      if (count < minimum || count > maximum) {
+        return 'Vui lòng chọn từ $minimum đến $maximum mục trong ${group.name}.';
+      }
+    }
+    return null;
+  }
+
+  void _showOptionMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +145,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ),
       );
     }
+    _initializeOptions(item);
 
     return Scaffold(
       body: SafeArea(
@@ -104,6 +207,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               ? null
                               : () => setState(() => _quantity -= 1),
                           onIncrease: () => setState(() => _quantity += 1),
+                          selectedOptionIds: _selectedOptionIds,
+                          onToggleOption: _toggleOption,
                         );
 
                         return Padding(
@@ -163,7 +268,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         primaryLabel: 'Thêm vào giỏ hàng',
         primaryIcon: Icons.add_shopping_cart,
         onPrimary: () {
-          final added = controller.addToCart(item, quantity: _quantity);
+          final selectionError = _selectionError(item);
+          if (selectionError != null) {
+            _showOptionMessage(selectionError);
+            return;
+          }
+          final added = controller.addToCart(
+            item,
+            quantity: _quantity,
+            selectedOptionIds: _selectedOptionIds,
+          );
           if (added) {
             context.go(AppRouter.cart);
           } else {
@@ -248,6 +362,8 @@ class _ProductInfo extends StatelessWidget {
     required this.quantity,
     required this.onDecrease,
     required this.onIncrease,
+    required this.selectedOptionIds,
+    required this.onToggleOption,
   });
 
   final RuntimeMenuItem item;
@@ -255,6 +371,12 @@ class _ProductInfo extends StatelessWidget {
   final int quantity;
   final VoidCallback? onDecrease;
   final VoidCallback onIncrease;
+  final Set<String> selectedOptionIds;
+  final void Function(
+    RuntimeMenuOptionGroup group,
+    RuntimeMenuProductOption option,
+  )
+  onToggleOption;
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +402,10 @@ class _ProductInfo extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              KioskFormatters.money(item.finalPrice, currency: item.currency),
+              KioskFormatters.money(
+                item.priceForOptions(selectedOptionIds),
+                currency: item.currency,
+              ),
               style: Theme.of(
                 context,
               ).textTheme.displayMedium?.copyWith(color: colorScheme.primary),
@@ -307,6 +432,16 @@ class _ProductInfo extends StatelessWidget {
               const _RuntimeAvailabilityNotice(),
               const SizedBox(height: 16),
             ],
+            if (item.optionGroups.isNotEmpty) ...[
+              for (final group in item.optionGroups) ...[
+                _OptionGroupSelector(
+                  group: group,
+                  selectedOptionIds: selectedOptionIds,
+                  onToggle: (option) => onToggleOption(group, option),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ],
             const SizedBox(height: 20),
             Wrap(
               spacing: 12,
@@ -328,6 +463,62 @@ class _ProductInfo extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _OptionGroupSelector extends StatelessWidget {
+  const _OptionGroupSelector({
+    required this.group,
+    required this.selectedOptionIds,
+    required this.onToggle,
+  });
+
+  final RuntimeMenuOptionGroup group;
+  final Set<String> selectedOptionIds;
+  final ValueChanged<RuntimeMenuProductOption> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final minimum = group.isRequired && group.minSelections < 1
+        ? 1
+        : group.minSelections;
+    final maximum = group.selectionType == RuntimeOptionSelectionType.single
+        ? 1
+        : group.maxSelections;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(group.name, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 4),
+        Text(
+          minimum > 0
+              ? 'Chọn từ $minimum đến $maximum'
+              : 'Có thể chọn tối đa $maximum',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: group.options
+              .map((option) {
+                final selected = selectedOptionIds.contains(
+                  option.productOptionId,
+                );
+                final priceLabel = option.priceDelta == 0
+                    ? ''
+                    : ' · +${KioskFormatters.money(option.priceDelta, currency: option.currency)}';
+                return FilterChip(
+                  selected: selected,
+                  onSelected: (_) => onToggle(option),
+                  label: Text('${option.name}$priceLabel'),
+                  showCheckmark: true,
+                );
+              })
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 }

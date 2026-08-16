@@ -9,7 +9,7 @@ The app reads compile-time values through `--dart-define`:
 
 | Variable | Purpose | Example |
 | --- | --- | --- |
-| `ICEBOT_API_BASE_URL` | IceBot backend origin, without a trailing API path | `http://127.0.0.1:5000` or `https://icebot.io.vn` |
+| `ICEBOT_API_BASE_URL` | IceBot backend origin, without a trailing API path | `http://127.0.0.1:5000` or `https://api.icebot.io.vn` |
 | `ICEBOT_KIOSK_ID` | Kiosk GUID used by runtime menu and order APIs | `aec68c48-207d-433d-b2fd-e7ddf7d5346a` |
 | `ICEBOT_DEMO_MODE` | Uses isolated local demo repositories when `true` | `false` |
 
@@ -92,7 +92,7 @@ $deviceId = "<ANDROID_DEVICE_SERIAL>"
 $kioskId = "aec68c48-207d-433d-b2fd-e7ddf7d5346a"
 
 flutter run -d $deviceId `
-  --dart-define=ICEBOT_API_BASE_URL=https://icebot.io.vn `
+  --dart-define=ICEBOT_API_BASE_URL=https://api.icebot.io.vn `
   --dart-define=ICEBOT_KIOSK_ID=$kioskId `
   --dart-define=ICEBOT_DEMO_MODE=false
 ```
@@ -122,7 +122,8 @@ payment or robot progress as real.
 6. Payment session shows backend QR payload or checkout URL only.
 7. Paid navigation enters order tracking, not a fake success screen.
 8. Tracking displays the backend order status:
-   - `ReadyForExecution`: `Đơn đang chờ xử lý`
+   - `ReadyForFulfillment`: `Sẵn sàng hoàn tất đơn`
+   - `FulfillmentIssue`: `Cần hỗ trợ hoàn tất đơn`
    - `Accepted`: `Hệ thống đã nhận đơn`
    - `Preparing`: `Robot đang chuẩn bị`
    - `Ready`: pickup guidance
@@ -156,7 +157,7 @@ Manual reset is allowed only for:
 - `Refunded`
 - `Compensated`
 
-Reset is blocked for `Draft`, `PendingPayment`, `Paid`, `ReadyForExecution`,
+Reset is blocked for `Draft`, `PendingPayment`, `Paid`, `ReadyForFulfillment`,
 `Accepted`, and `Preparing`. There is no automatic reset timer: pickup and
 staff-support messages must remain visible until the customer explicitly
 returns to the menu.

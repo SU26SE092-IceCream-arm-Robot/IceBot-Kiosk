@@ -34,19 +34,33 @@ void main() {
       );
       expect(order.status, OrderStatus.pendingPayment);
       expect(order.totalAmount, item.finalPrice);
+      expect(order.orderAccessToken, isNotEmpty);
 
-      final session = await paymentRepository.createPaymentSession(order.id);
+      final session = await paymentRepository.createPaymentSession(
+        order.id,
+        orderAccessToken: order.orderAccessToken!,
+        idempotencyKey: 'demo-payment-001',
+        paymentMethodCode: 'payos',
+        expectedAmount: order.totalAmount,
+        expectedCurrency: order.currency,
+      );
       expect(session.qrCodePayload, contains('DEMO-QR'));
       expect(session.checkoutUrl, isNull);
 
-      var paymentStatus = await orderRepository.getPaymentStatus(order.id);
+      var paymentStatus = await orderRepository.getPaymentStatus(
+        order.id,
+        orderAccessToken: order.orderAccessToken!,
+      );
       expect(
         paymentStatus.paymentTransactionStatus,
         PaymentTransactionStatus.pending,
       );
 
       now = now.add(const Duration(seconds: 4));
-      paymentStatus = await orderRepository.getPaymentStatus(order.id);
+      paymentStatus = await orderRepository.getPaymentStatus(
+        order.id,
+        orderAccessToken: order.orderAccessToken!,
+      );
       expect(
         paymentStatus.paymentTransactionStatus,
         PaymentTransactionStatus.paid,
@@ -54,7 +68,10 @@ void main() {
       expect(paymentStatus.orderPaymentStatus, PaymentStatus.paid);
 
       now = now.add(const Duration(seconds: 10));
-      final completedOrder = await orderRepository.getOrder(order.id);
+      final completedOrder = await orderRepository.getOrder(
+        order.id,
+        orderAccessToken: order.orderAccessToken!,
+      );
       expect(completedOrder.status, OrderStatus.completed);
       expect(completedOrder.paymentStatus, PaymentStatus.paid);
     },

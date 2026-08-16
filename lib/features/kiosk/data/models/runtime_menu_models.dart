@@ -52,6 +52,7 @@ class RuntimeMenuItem {
     this.preparationTimeSeconds,
     this.imageUrl,
     this.recipeVersion,
+    this.optionGroups = const [],
   });
 
   final String menuId;
@@ -72,6 +73,7 @@ class RuntimeMenuItem {
   final int? preparationTimeSeconds;
   final String? imageUrl;
   final int? recipeVersion;
+  final List<RuntimeMenuOptionGroup> optionGroups;
 
   bool get isOrderable =>
       menuId.trim().isNotEmpty &&
@@ -103,6 +105,98 @@ class RuntimeMenuItem {
       preparationTimeSeconds: _readInt(map['preparationTimeSeconds']),
       imageUrl: map['imageUrl'] as String?,
       recipeVersion: _readInt(map['recipeVersion']),
+      optionGroups: _readList(
+        map['optionGroups'],
+        RuntimeMenuOptionGroup.fromJson,
+      ),
+    );
+  }
+
+  double priceForOptions(Iterable<String> selectedOptionIds) {
+    final selected = selectedOptionIds.toSet();
+    final optionTotal = optionGroups
+        .expand((group) => group.options)
+        .where((option) => selected.contains(option.productOptionId))
+        .fold<double>(0, (total, option) => total + option.priceDelta);
+    return finalPrice + optionTotal;
+  }
+}
+
+enum RuntimeOptionSelectionType { single, multiple, unknown }
+
+class RuntimeMenuOptionGroup {
+  const RuntimeMenuOptionGroup({
+    required this.optionGroupId,
+    required this.code,
+    required this.name,
+    required this.selectionType,
+    required this.minSelections,
+    required this.maxSelections,
+    required this.isRequired,
+    required this.options,
+  });
+
+  final int optionGroupId;
+  final String code;
+  final String name;
+  final RuntimeOptionSelectionType selectionType;
+  final int minSelections;
+  final int maxSelections;
+  final bool isRequired;
+  final List<RuntimeMenuProductOption> options;
+
+  int get effectiveMinimum =>
+      isRequired && minSelections < 1 ? 1 : minSelections;
+
+  factory RuntimeMenuOptionGroup.fromJson(Object? json) {
+    final map = _asMap(json);
+    final selectionType = switch (map['selectionType']?.toString()) {
+      'Single' => RuntimeOptionSelectionType.single,
+      'Multiple' => RuntimeOptionSelectionType.multiple,
+      _ => RuntimeOptionSelectionType.unknown,
+    };
+    return RuntimeMenuOptionGroup(
+      optionGroupId: _readInt(map['optionGroupId']) ?? 0,
+      code: map['code'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      selectionType: selectionType,
+      minSelections: _readInt(map['minSelections']) ?? 0,
+      maxSelections: _readInt(map['maxSelections']) ?? 0,
+      isRequired: map['isRequired'] == true,
+      options: _readList(map['options'], RuntimeMenuProductOption.fromJson),
+    );
+  }
+}
+
+class RuntimeMenuProductOption {
+  const RuntimeMenuProductOption({
+    required this.productOptionId,
+    required this.code,
+    required this.name,
+    this.description,
+    required this.priceDelta,
+    required this.currency,
+    required this.isDefault,
+  });
+
+  final String productOptionId;
+  final String code;
+  final String name;
+  final String? description;
+  final double priceDelta;
+  final String currency;
+  final bool isDefault;
+
+  factory RuntimeMenuProductOption.fromJson(Object? json) {
+    final map = _asMap(json);
+    return RuntimeMenuProductOption(
+      productOptionId: map['productOptionId'] as String? ?? '',
+      code: map['code'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      description: map['description'] as String?,
+      priceDelta: _readDouble(map['priceDelta']),
+      currency: map['currency'] as String? ?? 'VND',
+      isDefault: map['isDefault'] == true,
     );
   }
 }

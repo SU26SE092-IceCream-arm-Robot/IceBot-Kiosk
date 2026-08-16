@@ -29,6 +29,12 @@ void main() {
       expect(menu.containsMachineRuntimeState, isFalse);
       expect(menu.items.single.displayName, 'Kem Vanilla');
       expect(menu.items.single.finalPrice, 35000);
+      final optionGroup = menu.items.single.optionGroups.single;
+      expect(optionGroup.name, 'Kích cỡ');
+      expect(optionGroup.selectionType.name, 'single');
+      expect(optionGroup.isRequired, isTrue);
+      expect(optionGroup.options.single.name, 'Lớn');
+      expect(menu.items.single.priceForOptions(['option-large']), 45000);
     },
   );
 
@@ -113,6 +119,28 @@ final Map<String, Object?> _successBody = {
         'finalPrice': 35000,
         'currency': 'VND',
         'preparationTimeSeconds': 30,
+        'optionGroups': [
+          {
+            'optionGroupId': 12,
+            'code': 'SIZE',
+            'name': 'Kích cỡ',
+            'selectionType': 'Single',
+            'minSelections': 1,
+            'maxSelections': 1,
+            'isRequired': true,
+            'options': [
+              {
+                'productOptionId': 'option-large',
+                'code': 'LARGE',
+                'name': 'Lớn',
+                'description': 'Thêm dung tích',
+                'priceDelta': 10000,
+                'currency': 'VND',
+                'isDefault': true,
+              },
+            ],
+          },
+        ],
       },
     ],
   },

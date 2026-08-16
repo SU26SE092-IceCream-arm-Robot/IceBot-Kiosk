@@ -34,8 +34,10 @@ class KioskStatusPresenter {
         order?.requiresStaffSupport == true ||
         status?.orderStatus == OrderStatus.refundRequired ||
         status?.orderStatus == OrderStatus.executionRejected ||
+        status?.orderStatus == OrderStatus.fulfillmentIssue ||
         order?.status == OrderStatus.refundRequired ||
-        order?.status == OrderStatus.executionRejected;
+        order?.status == OrderStatus.executionRejected ||
+        order?.status == OrderStatus.fulfillmentIssue;
     if (requiresStaffSupport) {
       return KioskStatusViewData(
         title: 'Cần nhân viên hỗ trợ',
@@ -214,9 +216,9 @@ class KioskStatusPresenter {
         icon: Icons.check_circle_outline,
         color: success,
       ),
-      OrderStatus.readyForExecution => KioskStatusViewData(
-        title: 'Đơn đang chờ xử lý',
-        message: 'Hệ thống đang xếp lịch xử lý đơn hàng của bạn.',
+      OrderStatus.readyForFulfillment => KioskStatusViewData(
+        title: 'Sẵn sàng hoàn tất đơn',
+        message: 'Hệ thống đang chuẩn bị hoàn tất đơn hàng của bạn.',
         icon: Icons.schedule_outlined,
         color: primary,
       ),
@@ -251,7 +253,8 @@ class KioskStatusPresenter {
         color: warning,
       ),
       OrderStatus.failed ||
-      OrderStatus.executionRejected => KioskStatusViewData(
+      OrderStatus.executionRejected ||
+      OrderStatus.fulfillmentIssue => KioskStatusViewData(
         title: 'Đơn hàng gặp lỗi',
         message: 'Vui lòng liên hệ nhân viên hỗ trợ.',
         icon: Icons.error_outline,
@@ -294,6 +297,7 @@ class KioskStatusPresenter {
       OrderStatus.cancelled ||
       OrderStatus.failed ||
       OrderStatus.executionRejected ||
+      OrderStatus.fulfillmentIssue ||
       OrderStatus.refundRequired ||
       OrderStatus.refunded ||
       OrderStatus.compensated => true,

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
-import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/status/runtime_menu_availability_presenter.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/floating_cart_badge.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_panel.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
@@ -47,11 +47,14 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     if (controller.menuError != null && !controller.hasMenu) {
+      final error = controller.menuError!;
+      final availability = RuntimeMenuAvailabilityPresenter.fromError(error);
       return Scaffold(
         body: KioskBackdrop(
           child: KioskErrorPanel(
-            title: _errorTitle(controller.menuError!),
-            error: controller.menuError,
+            title: availability.title,
+            error: error,
+            primaryMessage: availability.message,
             actionLabel: 'Thử lại',
             onAction: () => controller.loadMenu(force: true),
           ),
@@ -143,16 +146,6 @@ class _MenuScreenState extends State<MenuScreen> {
         ),
       ),
     );
-  }
-
-  String _errorTitle(ApiException error) {
-    return switch (error.type) {
-      ApiErrorType.notFound => 'Không tìm thấy kiosk',
-      ApiErrorType.conflict => 'Kiosk đang tạm ngưng',
-      ApiErrorType.network || ApiErrorType.timeout => 'Không thể kết nối',
-      ApiErrorType.validation => 'Cấu hình kiosk không hợp lệ',
-      _ => 'Không thể tải menu',
-    };
   }
 }
 

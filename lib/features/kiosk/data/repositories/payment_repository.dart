@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
@@ -9,18 +10,31 @@ class PaymentRepository {
 
   Future<PaymentSessionResult> createPaymentSession(
     String orderId, {
-    String? idempotencyKey,
-    String? description,
+    required String orderAccessToken,
+    required String idempotencyKey,
+    required String paymentMethodCode,
+    required double expectedAmount,
+    required String expectedCurrency,
   }) async {
+    final token = orderAccessToken.trim();
+    final key = idempotencyKey.trim();
+    if (token.isEmpty || key.isEmpty) {
+      throw const ApiException(
+        type: ApiErrorType.unauthorized,
+        message: 'Phiên truy cập thanh toán không còn hợp lệ.',
+      );
+    }
     final result = await _client.postResult<PaymentSessionResult>(
       '/api/v1/orders/$orderId/payment-sessions',
       data: {
-        if (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
-          'idempotencyKey': idempotencyKey.trim(),
-        if (description != null && description.trim().isNotEmpty)
-          'description': description.trim(),
+        'paymentMethodCode': paymentMethodCode.trim(),
+        'expectedAmount': expectedAmount,
+        'expectedCurrency': expectedCurrency.trim().toUpperCase(),
       },
       fromJson: PaymentSessionResult.fromJson,
+      options: Options(
+        headers: {'Idempotency-Key': key, 'Order-Access-Token': token},
+      ),
     );
 
     final session = result.data;

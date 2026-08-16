@@ -5,17 +5,25 @@ import 'package:icebot_kiosk/config/themes/icebot_colors.dart';
 import 'package:icebot_kiosk/config/themes/icebot_spacing.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PaymentQrPanel extends StatelessWidget {
-  const PaymentQrPanel({required this.session, super.key});
+  const PaymentQrPanel({
+    required this.session,
+    this.isExpired = false,
+    super.key,
+  });
 
   final PaymentSessionResult session;
+  final bool isExpired;
 
   @override
   Widget build(BuildContext context) {
-    final payload = session.qrCodePayload?.trim();
-    final checkoutUrl = session.hasUsableCheckoutUrl ? session.checkoutUrl!.trim() : null;
+    final payload = isExpired ? null : session.qrCodePayload?.trim();
+    final checkoutUrl = !isExpired && session.hasUsableCheckoutUrl
+        ? session.checkoutUrl!.trim()
+        : null;
     final layout = KioskLayoutSpec.of(context);
 
     return KioskSectionCard(
@@ -25,17 +33,23 @@ class PaymentQrPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.qr_code_scanner_rounded, color: IceBotColors.botNavy, size: 32),
+              Icon(
+                Icons.qr_code_scanner_rounded,
+                color: IceBotColors.botNavy,
+                size: 32,
+              ),
               const SizedBox(width: 16),
-              Text(
-                'Quét mã để thanh toán',
-                style: Theme.of(context).textTheme.displayMedium,
+              Expanded(
+                child: Text(
+                  'Quét mã để thanh toán',
+                  style: Theme.of(context).textTheme.displayMedium,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            'Dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã. Nếu kiosk không hiển thị ảnh QR, hãy dùng mã thanh toán bên dưới.',
+            'Dùng ứng dụng ngân hàng hoặc ví điện tử để quét mã. Nếu không quét được, hãy mở trang thanh toán.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 24),
@@ -49,94 +63,110 @@ class PaymentQrPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
               border: Border.all(color: IceBotColors.frostBorder),
             ),
-            child: payload == null || payload.isEmpty
+            child: isExpired
+                ? Center(
+                    child: Text(
+                      'Mã thanh toán đã hết hạn.\nVui lòng tạo mã mới để tiếp tục.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(color: IceBotColors.warningAmber),
+                    ),
+                  )
+                : payload == null || payload.isEmpty
                 ? Center(
                     child: Text(
                       'Chưa có nội dung QR.\nVui lòng mở trang thanh toán nếu có.',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: IceBotColors.botNavyMuted,
-                          ),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(color: IceBotColors.botNavyMuted),
                     ),
                   )
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Icon(
-                        Icons.qr_code_2_rounded,
-                        size: layout.isCompact ? 96 : 120,
-                        color: IceBotColors.botNavy,
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Mã thanh toán (Payload)',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: IceBotColors.botNavyMuted,
-                            ),
-                      ),
-                      const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(layout.isCompact ? 16 : 20),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: IceBotColors.frostBorder),
                         ),
-                        child: SelectableText(
-                          payload,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: IceBotColors.botNavy,
-                                fontWeight: FontWeight.w800,
+                        child: QrImageView(
+                          data: payload,
+                          version: QrVersions.auto,
+                          size: layout.isCompact ? 220 : 280,
+                          backgroundColor: Colors.white,
+                          errorCorrectionLevel: QrErrorCorrectLevel.M,
+                          gapless: false,
+                          semanticsLabel: 'Mã QR thanh toán PayOS',
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.square,
+                            color: Colors.black,
+                          ),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.square,
+                            color: Colors.black,
+                          ),
+                          errorStateBuilder: (context, error) => SizedBox(
+                            width: layout.isCompact ? 220 : 280,
+                            height: layout.isCompact ? 220 : 280,
+                            child: Center(
+                              child: Text(
+                                'Không thể tạo mã QR.\nVui lòng mở trang thanh toán.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyLarge
+                                    ?.copyWith(
+                                      color: IceBotColors.botNavyMuted,
+                                    ),
                               ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Mã QR do PayOS cung cấp cho phiên thanh toán này.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: IceBotColors.botNavyMuted,
                         ),
                       ),
                     ],
                   ),
           ),
-          if (AppConfig.demoMode) ...[
-            const SizedBox(height: 16),
-            const _DemoQrNotice(),
-          ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: payload == null || payload.isEmpty
-                      ? null
-                      : () async {
-                          await Clipboard.setData(ClipboardData(text: payload));
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Đã sao chép mã thanh toán')),
-                            );
-                          }
-                        },
-                  icon: const Icon(Icons.copy_rounded),
+                  key: const ValueKey('copy-payment-code-button'),
+                  onPressed: payload != null && payload.isNotEmpty
+                      ? () => Clipboard.setData(ClipboardData(text: payload))
+                      : null,
+                  icon: const Icon(Icons.copy_outlined),
                   label: const Text('Sao chép mã'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                  ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: checkoutUrl == null || checkoutUrl.isEmpty
-                      ? null
-                      : () => launchUrl(Uri.parse(checkoutUrl), mode: LaunchMode.externalApplication),
-                  icon: const Icon(Icons.open_in_new_rounded),
+                child: OutlinedButton.icon(
+                  key: const ValueKey('open-checkout-button'),
+                  onPressed: checkoutUrl != null && payload != null && payload.isNotEmpty
+                      ? () => launchUrl(
+                            Uri.parse(checkoutUrl),
+                            mode: LaunchMode.externalApplication,
+                          )
+                      : null,
+                  icon: const Icon(Icons.open_in_browser_outlined),
                   label: const Text('Mở trang thanh toán'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                  ),
                 ),
               ),
             ],
           ),
+          if (AppConfig.demoMode) ...[
+            const SizedBox(height: 16),
+            const _DemoQrNotice(),
+          ],
         ],
       ),
     );
@@ -158,9 +188,9 @@ class _DemoQrNotice extends StatelessWidget {
       child: Text(
         'QR demo - không dùng để thanh toán thật.\nMàn hình này chỉ phục vụ hiển thị trên môi trường thử nghiệm.',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: IceBotColors.warningAmber,
-              fontWeight: FontWeight.w800,
-            ),
+          color: IceBotColors.warningAmber,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

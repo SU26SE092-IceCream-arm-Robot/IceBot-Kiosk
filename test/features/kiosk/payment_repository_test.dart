@@ -16,8 +16,11 @@ void main() {
 
     final session = await repository.createPaymentSession(
       '019eff41-0000-7000-8000-000000000001',
+      orderAccessToken: 'order-access-token-001',
       idempotencyKey: 'payment-intent-001',
-      description: 'IceBot ORD-001',
+      paymentMethodCode: 'payos',
+      expectedAmount: 35000,
+      expectedCurrency: 'vnd',
     );
 
     expect(
@@ -26,9 +29,18 @@ void main() {
     );
     expect(adapter.lastRequest?.method, 'POST');
     expect(adapter.lastRequest?.data, {
-      'idempotencyKey': 'payment-intent-001',
-      'description': 'IceBot ORD-001',
+      'paymentMethodCode': 'payos',
+      'expectedAmount': 35000,
+      'expectedCurrency': 'VND',
     });
+    expect(
+      adapter.lastRequest?.headers['Idempotency-Key'],
+      'payment-intent-001',
+    );
+    expect(
+      adapter.lastRequest?.headers['Order-Access-Token'],
+      'order-access-token-001',
+    );
     expect(session.orderId, '019eff41-0000-7000-8000-000000000001');
     expect(session.qrCodePayload, 'PAYLOAD-001');
     expect(session.hasPaymentAccess, isTrue);

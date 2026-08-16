@@ -112,17 +112,23 @@ class PaymentStatusResult {
 
   factory PaymentStatusResult.fromJson(Object? json) {
     final map = _asMap(json);
+    final customerStatus = map['customerStatus'];
     return PaymentStatusResult(
       paymentTransactionId: map['paymentTransactionId'] as String? ?? '',
       orderId: map['orderId'] as String? ?? '',
       provider: map['provider'] as String? ?? '',
       paymentTransactionStatus: PaymentTransactionStatusMapper.fromJson(
         map['paymentTransactionStatus'],
+        customerStatus: customerStatus,
       ),
       orderPaymentStatus: PaymentStatusMapper.fromJson(
         map['orderPaymentStatus'],
+        customerStatus: customerStatus,
       ),
-      orderStatus: OrderStatusMapper.fromJson(map['orderStatus']),
+      orderStatus: OrderStatusMapper.fromJson(
+        map['orderStatus'],
+        customerStatus: customerStatus,
+      ),
       amount: _readDouble(map['amount']),
       paidAmount: _readNullableDouble(map['paidAmount']),
       currency: map['currency'] as String? ?? 'VND',
@@ -139,15 +145,38 @@ class PaymentStatusResult {
 class PaymentTransactionStatusMapper {
   PaymentTransactionStatusMapper._();
 
-  static PaymentTransactionStatus fromJson(Object? value) {
-    return switch (value?.toString()) {
-      'Pending' => PaymentTransactionStatus.pending,
-      'Authorized' => PaymentTransactionStatus.authorized,
-      'Paid' => PaymentTransactionStatus.paid,
-      'Failed' => PaymentTransactionStatus.failed,
-      'Cancelled' => PaymentTransactionStatus.cancelled,
+  static PaymentTransactionStatus fromJson(
+    Object? value, {
+    Object? customerStatus,
+  }) {
+    final raw = value?.toString();
+    if (raw != null && raw.isNotEmpty) {
+      return switch (raw) {
+        'Pending' => PaymentTransactionStatus.pending,
+        'Authorized' => PaymentTransactionStatus.authorized,
+        'Paid' => PaymentTransactionStatus.paid,
+        'Failed' => PaymentTransactionStatus.failed,
+        'Cancelled' => PaymentTransactionStatus.cancelled,
+        'Refunded' => PaymentTransactionStatus.refunded,
+        'Expired' => PaymentTransactionStatus.expired,
+        _ => PaymentTransactionStatus.unknown,
+      };
+    }
+
+    return switch (customerStatus?.toString()) {
+      'WaitingForPayment' => PaymentTransactionStatus.pending,
+      'PaymentFailed' => PaymentTransactionStatus.failed,
+      'PaymentCancelled' => PaymentTransactionStatus.cancelled,
+      'PaymentExpired' => PaymentTransactionStatus.expired,
+      'Preparing' ||
+      'Delayed' ||
+      'PendingRecovery' ||
+      'Ready' ||
+      'Completed' ||
+      'SupportRequired' ||
+      'RefundRequired' ||
+      'Compensated' => PaymentTransactionStatus.paid,
       'Refunded' => PaymentTransactionStatus.refunded,
-      'Expired' => PaymentTransactionStatus.expired,
       _ => PaymentTransactionStatus.unknown,
     };
   }

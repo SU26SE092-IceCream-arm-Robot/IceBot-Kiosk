@@ -3,6 +3,7 @@ import 'package:icebot_kiosk/core/network/api_result.dart';
 
 enum ApiErrorType {
   validation,
+  unauthorized,
   notFound,
   conflict,
   upstream,
@@ -103,6 +104,7 @@ class ApiException implements Exception {
   static ApiErrorType _typeForStatusCode(int statusCode) {
     return switch (statusCode) {
       400 => ApiErrorType.validation,
+      401 || 403 => ApiErrorType.unauthorized,
       404 => ApiErrorType.notFound,
       409 => ApiErrorType.conflict,
       502 => ApiErrorType.upstream,
@@ -113,6 +115,8 @@ class ApiException implements Exception {
   static String _messageForStatusCode(int statusCode) {
     return switch (statusCode) {
       400 => 'Dữ liệu gửi lên không hợp lệ.',
+      401 => 'Phiên truy cập đơn hàng không còn hợp lệ.',
+      403 => 'Bạn không có quyền thực hiện thao tác này.',
       404 => 'Không tìm thấy dữ liệu.',
       409 => 'Kiosk hoặc sản phẩm đang không sẵn sàng.',
       502 => 'Không thể kết nối nhà cung cấp thanh toán.',

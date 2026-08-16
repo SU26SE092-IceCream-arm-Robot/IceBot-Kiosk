@@ -1,0 +1,48 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="IceBot Kiosk"
+    Manufacturer="IceBot"
+    Version="$(AppVersion)"
+    UpgradeCode="A98A51BC-8D90-432A-BDB5-04B427C2F050"
+    Scope="perMachine">
+    <MajorUpgrade
+      DowngradeErrorMessage="A newer version of IceBot Kiosk is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="IceBot Kiosk" />
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="IceBot Kiosk">
+      <ComponentRef Id="MainExecutable" />
+      <Files Directory="INSTALLFOLDER" Include="$(PublishDir)\**">
+        <Exclude Files="$(PublishDir)\icebot_kiosk.exe" />
+        <Exclude Files="$(PublishDir)\**\*.pdb" />
+      </Files>
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File
+          Id="IceBotKioskExecutable"
+          Source="$(PublishDir)\icebot_kiosk.exe"
+          KeyPath="yes">
+          <Shortcut
+            Id="StartMenuShortcut"
+            Directory="ProgramMenuFolder"
+            Name="IceBot Kiosk"
+            WorkingDirectory="INSTALLFOLDER"
+            Advertise="yes" />
+          <Shortcut
+            Id="DesktopShortcut"
+            Directory="DesktopFolder"
+            Name="IceBot Kiosk"
+            WorkingDirectory="INSTALLFOLDER"
+            Advertise="yes" />
+        </File>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

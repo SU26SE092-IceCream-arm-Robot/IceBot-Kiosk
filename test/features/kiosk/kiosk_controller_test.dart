@@ -188,17 +188,19 @@ void main() {
     expect(result, isNotNull);
     final json = orderRepository.lastRequest!.toJson();
     expect(json['kioskId'], 'kiosk-id');
-    expect(json['channel'], 'Tablet');
-    expect(json['runtimeSnapshotId'], 'snapshot-id');
-    expect(json['runtimeSnapshotGeneratedAt'], isNotNull);
+    expect(json, isNot(contains('channel')));
+    expect(json, isNot(contains('runtimeSnapshotId')));
+    expect(json, isNot(contains('runtimeSnapshotGeneratedAt')));
     expect(json['clientTotalAmount'], 70000);
-    expect(json['idempotencyKey'], isNotEmpty);
+    expect(json, isNot(contains('idempotencyKey')));
+    expect(orderRepository.lastRequest!.idempotencyKey, isNotEmpty);
     expect(json['clientOrderId'], isNotEmpty);
     expect(json['items'], [
       {
         'menuItemId': 'menu-item-id',
-        'clientLineId': 'line-menu-item-id',
+        'clientLineId': 'line-1',
         'quantity': 2,
+        'selectedOptions': <Object>[],
       },
     ]);
   });
@@ -346,6 +348,9 @@ void main() {
       orderRepository: orderRepository,
       paymentRepository: _FlakyPaymentRepository(failures: 0),
     );
+    await controller.loadMenu();
+    controller.addToCart(controller.menuItems.single);
+    expect(await controller.checkout(), isNotNull);
 
     final firstPoll = controller.refreshPaymentStatus('order-id');
     await orderRepository.started.future;
@@ -409,6 +414,29 @@ void main() {
   });
 
   test(
+    'invalid order access clears recovery and starts a safe new session',
+    () async {
+      final recoveryStore = _MemoryOrderRecoveryStore(
+        record: _recoveryRecord(OrderStatus.preparing),
+      );
+      final controller = KioskController(
+        menuRepository: _FakeMenuRepository(),
+        orderRepository: _UnauthorizedOrderRepository(),
+        paymentRepository: _FakePaymentRepository(),
+        orderRecoveryStore: recoveryStore,
+        kioskId: 'kiosk-id',
+      );
+
+      final restored = await controller.restoreActiveOrder();
+
+      expect(restored, isNull);
+      expect(recoveryStore.clearCalls, 1);
+      expect(controller.recoveryError?.type, ApiErrorType.unauthorized);
+      expect(controller.recoveryError?.message, contains('bắt đầu đơn mới'));
+    },
+  );
+
+  test(
     'restored pending order retries payment without creating an order',
     () async {
       final recoveryStore = _MemoryOrderRecoveryStore(
@@ -439,6 +467,9 @@ void main() {
       orderRepository: orderRepository,
       paymentRepository: _FlakyPaymentRepository(failures: 0),
     );
+    await controller.loadMenu();
+    controller.addToCart(controller.menuItems.single);
+    expect(await controller.checkout(), isNotNull);
 
     final firstPoll = controller.refreshOrder('order-id');
     await orderRepository.started.future;
@@ -680,8 +711,11 @@ class _FlakyPaymentRepository extends PaymentRepository {
   @override
   Future<PaymentSessionResult> createPaymentSession(
     String orderId, {
-    String? idempotencyKey,
-    String? description,
+    required String orderAccessToken,
+    required String idempotencyKey,
+    required String paymentMethodCode,
+    required double expectedAmount,
+    required String expectedCurrency,
   }) async {
     orderIds.add(orderId);
     idempotencyKeys.add(idempotencyKey);
@@ -715,8 +749,11 @@ class _MissingPaymentAccessRepository extends PaymentRepository {
   @override
   Future<PaymentSessionResult> createPaymentSession(
     String orderId, {
-    String? idempotencyKey,
-    String? description,
+    required String orderAccessToken,
+    required String idempotencyKey,
+    required String paymentMethodCode,
+    required double expectedAmount,
+    required String expectedCurrency,
   }) async {
     return PaymentSessionResult(
       paymentTransactionId: 'payment-id',
@@ -739,8 +776,11 @@ class _UncertainPaymentRepository extends PaymentRepository {
   @override
   Future<PaymentSessionResult> createPaymentSession(
     String orderId, {
-    String? idempotencyKey,
-    String? description,
+    required String orderAccessToken,
+    required String idempotencyKey,
+    required String paymentMethodCode,
+    required double expectedAmount,
+    required String expectedCurrency,
   }) async {
     orderIds.add(orderId);
     idempotencyKeys.add(idempotencyKey);
@@ -774,7 +814,15 @@ class _BlockingPaymentStatusOrderRepository extends OrderRepository {
       Completer<PaymentStatusResult>();
 
   @override
-  Future<PaymentStatusResult> getPaymentStatus(String orderId) {
+  Future<OrderResult> createOrder(CreateOrderRequest request) async {
+    return _orderResult();
+  }
+
+  @override
+  Future<PaymentStatusResult> getPaymentStatus(
+    String orderId, {
+    required String orderAccessToken,
+  }) {
     paymentStatusCalls++;
     if (!started.isCompleted) {
       started.complete();
@@ -799,7 +847,10 @@ class _RestorableOrderRepository extends OrderRepository {
   }
 
   @override
-  Future<OrderResult> getOrder(String orderId) async => order;
+  Future<OrderResult> getOrder(
+    String orderId, {
+    required String orderAccessToken,
+  }) async => order;
 }
 
 class _BlockingOrderRefreshRepository extends OrderRepository {
@@ -811,7 +862,15 @@ class _BlockingOrderRefreshRepository extends OrderRepository {
   final Completer<OrderResult> _result = Completer<OrderResult>();
 
   @override
-  Future<OrderResult> getOrder(String orderId) {
+  Future<OrderResult> createOrder(CreateOrderRequest request) async {
+    return _orderResult();
+  }
+
+  @override
+  Future<OrderResult> getOrder(
+    String orderId, {
+    required String orderAccessToken,
+  }) {
     getOrderCalls++;
     if (!started.isCompleted) {
       started.complete();
@@ -822,6 +881,23 @@ class _BlockingOrderRefreshRepository extends OrderRepository {
   void complete(OrderResult order) => _result.complete(order);
 }
 
+class _UnauthorizedOrderRepository extends OrderRepository {
+  _UnauthorizedOrderRepository()
+    : super(DioClient(baseUrl: 'http://localhost'));
+
+  @override
+  Future<OrderResult> getOrder(
+    String orderId, {
+    required String orderAccessToken,
+  }) {
+    throw const ApiException(
+      type: ApiErrorType.unauthorized,
+      statusCode: 401,
+      message: 'Order access token is invalid.',
+    );
+  }
+}
+
 class _MemoryOrderRecoveryStore implements OrderRecoveryStore {
   _MemoryOrderRecoveryStore({this.record});
 
@@ -830,7 +906,11 @@ class _MemoryOrderRecoveryStore implements OrderRecoveryStore {
   final List<OrderResult> savedOrders = [];
 
   @override
-  Future<void> save(OrderResult order, {DateTime? paymentExpiresAt}) async {
+  Future<void> save(
+    OrderResult order, {
+    String? orderAccessToken,
+    DateTime? paymentExpiresAt,
+  }) async {
     savedOrders.add(order);
   }
 
@@ -885,6 +965,7 @@ OrderResult _orderResult({
     customerStatusMessage: 'Waiting for payment.',
     canRetryPayment: status == OrderStatus.pendingPayment,
     requiresStaffSupport: false,
+    orderAccessToken: 'order-access-token-001',
     items: const [],
   );
 }
@@ -899,6 +980,7 @@ OrderRecoveryRecord _recoveryRecord(OrderStatus status) {
         : PaymentStatus.paid,
     savedAt: DateTime.utc(2026, 7, 1, 10),
     recoveryExpiresAt: DateTime.utc(2026, 7, 2, 10),
+    orderAccessToken: 'order-access-token-001',
   );
 }
 

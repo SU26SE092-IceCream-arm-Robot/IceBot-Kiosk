@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +13,7 @@ class OrderRecoveryRecord {
     required this.savedAt,
     required this.recoveryExpiresAt,
     this.paymentExpiresAt,
+    this.orderAccessToken,
   });
 
   final String orderId;
@@ -21,10 +23,24 @@ class OrderRecoveryRecord {
   final DateTime savedAt;
   final DateTime recoveryExpiresAt;
   final DateTime? paymentExpiresAt;
+  final String? orderAccessToken;
 
   bool isExpiredAt(DateTime now) => !now.isBefore(recoveryExpiresAt);
 
   bool get isTerminal => _isTerminalStatus(orderStatus);
+
+  OrderRecoveryRecord copyWith({String? orderAccessToken}) {
+    return OrderRecoveryRecord(
+      orderId: orderId,
+      kioskId: kioskId,
+      orderStatus: orderStatus,
+      paymentStatus: paymentStatus,
+      savedAt: savedAt,
+      recoveryExpiresAt: recoveryExpiresAt,
+      paymentExpiresAt: paymentExpiresAt,
+      orderAccessToken: orderAccessToken ?? this.orderAccessToken,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'schemaVersion': 1,
@@ -82,28 +98,65 @@ class OrderRecoveryRecord {
 }
 
 abstract class OrderRecoveryStore {
-  Future<void> save(OrderResult order, {DateTime? paymentExpiresAt});
+  Future<void> save(
+    OrderResult order, {
+    String? orderAccessToken,
+    DateTime? paymentExpiresAt,
+  });
 
   Future<OrderRecoveryRecord?> read(String kioskId);
 
   Future<void> clear();
 }
 
+abstract class OrderAccessTokenStore {
+  Future<void> write(String token);
+
+  Future<String?> read();
+
+  Future<void> clear();
+}
+
+class SecureOrderAccessTokenStore implements OrderAccessTokenStore {
+  SecureOrderAccessTokenStore(this._storage);
+
+  static const String storageKey = 'icebot.kiosk.orderAccessToken.v1';
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<void> write(String token) =>
+      _storage.write(key: storageKey, value: token);
+
+  @override
+  Future<String?> read() => _storage.read(key: storageKey);
+
+  @override
+  Future<void> clear() => _storage.delete(key: storageKey);
+}
+
 class SharedPreferencesOrderRecoveryStore implements OrderRecoveryStore {
   SharedPreferencesOrderRecoveryStore(
     this._preferences, {
+    required OrderAccessTokenStore tokenStore,
     DateTime Function()? clock,
     this.retention = const Duration(hours: 24),
-  }) : _clock = clock ?? DateTime.now;
+  }) : _tokenStore = tokenStore,
+       _clock = clock ?? DateTime.now;
 
   static const String storageKey = 'icebot.kiosk.activeOrder.v1';
 
   final SharedPreferences _preferences;
+  final OrderAccessTokenStore _tokenStore;
   final DateTime Function() _clock;
   final Duration retention;
 
   @override
-  Future<void> save(OrderResult order, {DateTime? paymentExpiresAt}) async {
+  Future<void> save(
+    OrderResult order, {
+    String? orderAccessToken,
+    DateTime? paymentExpiresAt,
+  }) async {
     if (_isTerminalStatus(order.status)) {
       await clear();
       return;
@@ -120,6 +173,10 @@ class SharedPreferencesOrderRecoveryStore implements OrderRecoveryStore {
       paymentExpiresAt: paymentExpiresAt,
     );
     await _preferences.setString(storageKey, jsonEncode(record.toJson()));
+    final token = orderAccessToken?.trim();
+    if (token != null && token.isNotEmpty) {
+      await _tokenStore.write(token);
+    }
   }
 
   @override
@@ -140,7 +197,12 @@ class SharedPreferencesOrderRecoveryStore implements OrderRecoveryStore {
         await clear();
         return null;
       }
-      return record;
+      final token = await _tokenStore.read();
+      if (token == null || token.trim().isEmpty) {
+        await clear();
+        return null;
+      }
+      return record.copyWith(orderAccessToken: token.trim());
     } on Object {
       await clear();
       return null;
@@ -148,14 +210,21 @@ class SharedPreferencesOrderRecoveryStore implements OrderRecoveryStore {
   }
 
   @override
-  Future<void> clear() => _preferences.remove(storageKey);
+  Future<void> clear() async {
+    await _preferences.remove(storageKey);
+    await _tokenStore.clear();
+  }
 }
 
 class NoopOrderRecoveryStore implements OrderRecoveryStore {
   const NoopOrderRecoveryStore();
 
   @override
-  Future<void> save(OrderResult order, {DateTime? paymentExpiresAt}) async {}
+  Future<void> save(
+    OrderResult order, {
+    String? orderAccessToken,
+    DateTime? paymentExpiresAt,
+  }) async {}
 
   @override
   Future<OrderRecoveryRecord?> read(String kioskId) async => null;

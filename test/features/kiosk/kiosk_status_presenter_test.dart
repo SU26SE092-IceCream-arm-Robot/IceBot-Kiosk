@@ -48,11 +48,11 @@ void main() {
   });
 
   test('uses neutral copy until order is actually preparing', () {
-    final readyForExecution = _present(OrderStatus.readyForExecution);
+    final readyForFulfillment = _present(OrderStatus.readyForFulfillment);
     final accepted = _present(OrderStatus.accepted);
     final preparing = _present(OrderStatus.preparing);
 
-    expect(readyForExecution.title, 'Đơn đang chờ xử lý');
+    expect(readyForFulfillment.title, 'Sẵn sàng hoàn tất đơn');
     expect(accepted.title, 'Hệ thống đã nhận đơn');
     expect(preparing.title, 'Robot đang chuẩn bị');
   });
@@ -62,7 +62,8 @@ void main() {
       OrderStatus.draft: 'Đơn hàng đang nhập',
       OrderStatus.pendingPayment: 'Đang chờ thanh toán',
       OrderStatus.paid: 'Đã thanh toán',
-      OrderStatus.readyForExecution: 'Đơn đang chờ xử lý',
+      OrderStatus.readyForFulfillment: 'Sẵn sàng hoàn tất đơn',
+      OrderStatus.fulfillmentIssue: 'Đơn hàng gặp lỗi',
       OrderStatus.accepted: 'Hệ thống đã nhận đơn',
       OrderStatus.preparing: 'Robot đang chuẩn bị',
       OrderStatus.ready: 'Món đã sẵn sàng',
@@ -104,7 +105,7 @@ void main() {
 
     for (final status in [
       OrderStatus.paid,
-      OrderStatus.readyForExecution,
+      OrderStatus.readyForFulfillment,
       OrderStatus.accepted,
       OrderStatus.preparing,
       OrderStatus.ready,

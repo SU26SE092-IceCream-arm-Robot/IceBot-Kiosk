@@ -4,7 +4,7 @@ enum OrderStatus {
   draft,
   pendingPayment,
   paid,
-  readyForExecution,
+  readyForFulfillment,
   accepted,
   preparing,
   ready,
@@ -15,6 +15,7 @@ enum OrderStatus {
   refundRequired,
   refunded,
   compensated,
+  fulfillmentIssue,
   unknown,
 }
 
@@ -58,12 +59,8 @@ class CreateOrderRequest {
 
   Map<String, dynamic> toJson() => _removeNulls({
     'kioskId': kioskId,
-    'idempotencyKey': idempotencyKey,
     'clientOrderId': clientOrderId,
-    'runtimeSnapshotId': runtimeSnapshotId,
-    'runtimeSnapshotGeneratedAt': runtimeSnapshotGeneratedAt?.toIso8601String(),
     'clientTotalAmount': clientTotalAmount,
-    'channel': channel,
     'customerName': customerName,
     'customerPhoneNumber': customerPhoneNumber,
     'notes': notes,
@@ -76,26 +73,37 @@ class CreateOrderItemRequest {
     required this.menuItemId,
     required this.quantity,
     this.clientLineId,
-    this.optionsJson,
+    this.selectedOptions = const [],
   });
 
   final String menuItemId;
   final String? clientLineId;
   final int quantity;
-  final String? optionsJson;
+  final List<SelectedProductOptionRequest> selectedOptions;
 
   Map<String, dynamic> toJson() => _removeNulls({
     'menuItemId': menuItemId,
     'clientLineId': clientLineId,
     'quantity': quantity,
-    'optionsJson': optionsJson,
+    'selectedOptions': selectedOptions
+        .map((option) => option.toJson())
+        .toList(growable: false),
   });
+}
+
+class SelectedProductOptionRequest {
+  const SelectedProductOptionRequest({required this.productOptionId});
+
+  final String productOptionId;
+
+  Map<String, dynamic> toJson() => {'productOptionId': productOptionId};
 }
 
 class OrderResult {
   const OrderResult({
     required this.id,
     required this.kioskId,
+    this.orderAccessToken,
     this.storeId,
     this.organizationId,
     required this.orderNumber,
@@ -112,6 +120,7 @@ class OrderResult {
     required this.totalAmount,
     required this.paidAmount,
     required this.placedAt,
+    this.paymentDeadlineAt,
     this.paidAt,
     this.completedAt,
     this.cancelledAt,
@@ -124,6 +133,7 @@ class OrderResult {
 
   final String id;
   final String kioskId;
+  final String? orderAccessToken;
   final String? storeId;
   final String? organizationId;
   final String orderNumber;
@@ -140,6 +150,7 @@ class OrderResult {
   final double totalAmount;
   final double paidAmount;
   final DateTime placedAt;
+  final DateTime? paymentDeadlineAt;
   final DateTime? paidAt;
   final DateTime? completedAt;
   final DateTime? cancelledAt;
@@ -154,6 +165,7 @@ class OrderResult {
     return OrderResult(
       id: map['id'] as String? ?? '',
       kioskId: map['kioskId'] as String? ?? '',
+      orderAccessToken: map['orderAccessToken'] as String?,
       storeId: map['storeId'] as String?,
       organizationId: map['organizationId'] as String?,
       orderNumber: map['orderNumber'] as String? ?? '',
@@ -163,8 +175,14 @@ class OrderResult {
         map['runtimeSnapshotGeneratedAt'],
       ),
       channel: map['channel'] as String? ?? AppConfig.appChannel,
-      status: OrderStatusMapper.fromJson(map['status']),
-      paymentStatus: PaymentStatusMapper.fromJson(map['paymentStatus']),
+      status: OrderStatusMapper.fromJson(
+        map['status'],
+        customerStatus: map['customerStatus'],
+      ),
+      paymentStatus: PaymentStatusMapper.fromJson(
+        map['paymentStatus'],
+        customerStatus: map['customerStatus'],
+      ),
       currency: map['currency'] as String? ?? 'VND',
       subtotalAmount: _readDouble(map['subtotalAmount']),
       discountAmount: _readDouble(map['discountAmount']),
@@ -172,6 +190,7 @@ class OrderResult {
       totalAmount: _readDouble(map['totalAmount']),
       paidAmount: _readDouble(map['paidAmount']),
       placedAt: _readDateTime(map['placedAt']),
+      paymentDeadlineAt: _readNullableDateTime(map['paymentDeadlineAt']),
       paidAt: _readNullableDateTime(map['paidAt']),
       completedAt: _readNullableDateTime(map['completedAt']),
       cancelledAt: _readNullableDateTime(map['cancelledAt']),
@@ -204,6 +223,7 @@ class OrderItemResult {
     required this.discountAmount,
     required this.totalAmount,
     required this.status,
+    this.selectedOptions = const [],
   });
 
   final String id;
@@ -224,6 +244,7 @@ class OrderItemResult {
   final double discountAmount;
   final double totalAmount;
   final String status;
+  final List<OrderItemOptionResult> selectedOptions;
 
   factory OrderItemResult.fromJson(Object? json) {
     final map = _asMap(json);
@@ -234,20 +255,69 @@ class OrderItemResult {
       productVariantId: map['productVariantId'] as String? ?? '',
       recipeId: map['recipeId'] as String?,
       clientLineId: map['clientLineId'] as String?,
-      menuItemCodeSnapshot: map['menuItemCodeSnapshot'] as String? ?? '',
-      menuItemNameSnapshot: map['menuItemNameSnapshot'] as String? ?? '',
-      productCodeSnapshot: map['productCodeSnapshot'] as String? ?? '',
-      productNameSnapshot: map['productNameSnapshot'] as String? ?? '',
+      menuItemCodeSnapshot:
+          map['menuItemCode'] as String? ??
+          map['menuItemCodeSnapshot'] as String? ??
+          '',
+      menuItemNameSnapshot:
+          map['menuItemName'] as String? ??
+          map['menuItemNameSnapshot'] as String? ??
+          '',
+      productCodeSnapshot:
+          map['productCode'] as String? ??
+          map['productCodeSnapshot'] as String? ??
+          '',
+      productNameSnapshot:
+          map['productName'] as String? ??
+          map['productNameSnapshot'] as String? ??
+          '',
       productVariantCodeSnapshot:
-          map['productVariantCodeSnapshot'] as String? ?? '',
+          map['productVariantCode'] as String? ??
+          map['productVariantCodeSnapshot'] as String? ??
+          '',
       productVariantNameSnapshot:
-          map['productVariantNameSnapshot'] as String? ?? '',
-      recipeVersionSnapshot: _readInt(map['recipeVersionSnapshot']),
+          map['productVariantName'] as String? ??
+          map['productVariantNameSnapshot'] as String? ??
+          '',
+      recipeVersionSnapshot:
+          _readInt(map['recipeVersion']) ??
+          _readInt(map['recipeVersionSnapshot']),
       quantity: _readInt(map['quantity']) ?? 0,
       unitPrice: _readDouble(map['unitPrice']),
       discountAmount: _readDouble(map['discountAmount']),
       totalAmount: _readDouble(map['totalAmount']),
       status: map['status'] as String? ?? '',
+      selectedOptions: _readList(
+        map['selectedOptions'],
+        OrderItemOptionResult.fromJson,
+      ),
+    );
+  }
+}
+
+class OrderItemOptionResult {
+  const OrderItemOptionResult({
+    required this.productOptionId,
+    required this.optionGroupCode,
+    required this.code,
+    required this.name,
+    required this.priceDelta,
+  });
+
+  final String productOptionId;
+  final String optionGroupCode;
+  final String code;
+  final String name;
+  final double priceDelta;
+
+  factory OrderItemOptionResult.fromJson(Object? json) {
+    final map = _asMap(json);
+    return OrderItemOptionResult(
+      productOptionId: map['productOptionId'] as String? ?? '',
+      optionGroupCode: map['optionGroupCode'] as String? ?? '',
+      code: map['code'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      priceDelta: _readDouble(map['priceDelta']),
     );
   }
 }
@@ -255,19 +325,40 @@ class OrderItemResult {
 class OrderStatusMapper {
   OrderStatusMapper._();
 
-  static OrderStatus fromJson(Object? value) {
-    return switch (value?.toString()) {
+  static OrderStatus fromJson(Object? value, {Object? customerStatus}) {
+    final raw = value?.toString();
+    if (raw != null && raw.isNotEmpty) {
+      return switch (raw) {
+        'Draft' => OrderStatus.draft,
+        'PendingPayment' => OrderStatus.pendingPayment,
+        'Paid' => OrderStatus.paid,
+        'ReadyForFulfillment' => OrderStatus.readyForFulfillment,
+        'Accepted' => OrderStatus.accepted,
+        'Preparing' => OrderStatus.preparing,
+        'Ready' => OrderStatus.ready,
+        'Completed' => OrderStatus.completed,
+        'Cancelled' => OrderStatus.cancelled,
+        'Failed' => OrderStatus.failed,
+        'ExecutionRejected' => OrderStatus.executionRejected,
+        'RefundRequired' => OrderStatus.refundRequired,
+        'Refunded' => OrderStatus.refunded,
+        'Compensated' => OrderStatus.compensated,
+        'FulfillmentIssue' => OrderStatus.fulfillmentIssue,
+        _ => OrderStatus.unknown,
+      };
+    }
+
+    return switch (customerStatus?.toString()) {
       'Draft' => OrderStatus.draft,
-      'PendingPayment' => OrderStatus.pendingPayment,
-      'Paid' => OrderStatus.paid,
-      'ReadyForExecution' => OrderStatus.readyForExecution,
-      'Accepted' => OrderStatus.accepted,
-      'Preparing' => OrderStatus.preparing,
+      'WaitingForPayment' ||
+      'PaymentFailed' ||
+      'PaymentCancelled' ||
+      'PaymentExpired' => OrderStatus.pendingPayment,
+      'Preparing' || 'Delayed' || 'PendingRecovery' => OrderStatus.preparing,
       'Ready' => OrderStatus.ready,
       'Completed' => OrderStatus.completed,
       'Cancelled' => OrderStatus.cancelled,
-      'Failed' => OrderStatus.failed,
-      'ExecutionRejected' => OrderStatus.executionRejected,
+      'SupportRequired' => OrderStatus.fulfillmentIssue,
       'RefundRequired' => OrderStatus.refundRequired,
       'Refunded' => OrderStatus.refunded,
       'Compensated' => OrderStatus.compensated,
@@ -279,15 +370,36 @@ class OrderStatusMapper {
 class PaymentStatusMapper {
   PaymentStatusMapper._();
 
-  static PaymentStatus fromJson(Object? value) {
-    return switch (value?.toString()) {
-      'Unpaid' => PaymentStatus.unpaid,
-      'Authorized' => PaymentStatus.authorized,
-      'Paid' => PaymentStatus.paid,
-      'PartiallyRefunded' => PaymentStatus.partiallyRefunded,
+  static PaymentStatus fromJson(Object? value, {Object? customerStatus}) {
+    final raw = value?.toString();
+    if (raw != null && raw.isNotEmpty) {
+      return switch (raw) {
+        'Unpaid' => PaymentStatus.unpaid,
+        'Authorized' => PaymentStatus.authorized,
+        'Paid' => PaymentStatus.paid,
+        'PartiallyRefunded' => PaymentStatus.partiallyRefunded,
+        'Refunded' => PaymentStatus.refunded,
+        'Failed' => PaymentStatus.failed,
+        'Cancelled' => PaymentStatus.cancelled,
+        _ => PaymentStatus.unknown,
+      };
+    }
+
+    return switch (customerStatus?.toString()) {
+      'Draft' ||
+      'WaitingForPayment' ||
+      'PaymentFailed' ||
+      'PaymentCancelled' ||
+      'PaymentExpired' => PaymentStatus.unpaid,
+      'Preparing' ||
+      'Delayed' ||
+      'PendingRecovery' ||
+      'Ready' ||
+      'Completed' ||
+      'SupportRequired' ||
+      'RefundRequired' ||
+      'Compensated' => PaymentStatus.paid,
       'Refunded' => PaymentStatus.refunded,
-      'Failed' => PaymentStatus.failed,
-      'Cancelled' => PaymentStatus.cancelled,
       _ => PaymentStatus.unknown,
     };
   }

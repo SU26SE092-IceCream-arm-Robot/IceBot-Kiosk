@@ -13,6 +13,7 @@ class KioskErrorPanel extends StatelessWidget {
   const KioskErrorPanel({
     required this.title,
     required this.error,
+    this.primaryMessage,
     this.actionLabel,
     this.onAction,
     super.key,
@@ -20,6 +21,7 @@ class KioskErrorPanel extends StatelessWidget {
 
   final String title;
   final ApiException? error;
+  final String? primaryMessage;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -28,7 +30,7 @@ class KioskErrorPanel extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final layout = KioskLayoutSpec.of(context);
     final helperText = _helperText(error);
-    final primaryMessage = _primaryMessage(error);
+    final resolvedPrimaryMessage = primaryMessage ?? _primaryMessage(error);
     final iconBoxSize = layout.isCompact ? 104.0 : 120.0;
     final iconSize = layout.isCompact ? 58.0 : 70.0;
 
@@ -51,7 +53,9 @@ class KioskErrorPanel extends StatelessWidget {
                   height: iconBoxSize,
                   decoration: BoxDecoration(
                     color: IceBotColors.dangerContainer,
-                    borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+                    borderRadius: BorderRadius.circular(
+                      IceBotSpacing.cardRadius,
+                    ),
                     border: Border.all(
                       color: IceBotColors.dangerRed.withValues(alpha: 0.35),
                     ),
@@ -72,7 +76,7 @@ class KioskErrorPanel extends StatelessWidget {
                 const SizedBox(height: 16),
                 // Primary message
                 Text(
-                  primaryMessage,
+                  resolvedPrimaryMessage,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
@@ -127,15 +131,12 @@ class KioskErrorPanel extends StatelessWidget {
     return switch (error?.type) {
       ApiErrorType.timeout =>
         'Kết nối đang chậm. Vui lòng thử lại sau vài giây.',
-      ApiErrorType.network =>
-        'Kiểm tra mạng của kiosk hoặc kết nối backend.',
-      ApiErrorType.notFound =>
-        'Kiosk hoặc dữ liệu menu chưa được cấu hình.',
+      ApiErrorType.network => 'Kiểm tra mạng của kiosk hoặc kết nối backend.',
+      ApiErrorType.notFound => 'Kiosk hoặc dữ liệu menu chưa được cấu hình.',
       ApiErrorType.conflict =>
         'Kiosk hoặc sản phẩm đang tạm thời không sẵn sàng.',
-      ApiErrorType.upstream => error?.message == null
-          ? null
-          : 'Chi tiết kỹ thuật: ${error!.message}',
+      ApiErrorType.upstream =>
+        error?.message == null ? null : 'Chi tiết kỹ thuật: ${error!.message}',
       _ => null,
     };
   }

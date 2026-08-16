@@ -267,12 +267,22 @@ class _CheckoutItems extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             KioskFormatters.money(
-                              line.item.finalPrice,
+                              line.unitPrice,
                               currency: line.item.currency,
                             ),
                             style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(color: IceBotColors.botNavyMuted),
                           ),
+                          if (line.selectedOptions.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              line.selectedOptions
+                                  .map((option) => option.name)
+                                  .join(', '),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: IceBotColors.botNavyMuted),
+                            ),
+                          ],
                         ],
                       ),
                     ),
