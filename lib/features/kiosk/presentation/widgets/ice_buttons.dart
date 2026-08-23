@@ -136,11 +136,7 @@ class _ButtonContent extends StatelessWidget {
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 22),
-        const SizedBox(width: 10),
-        Text(label),
-      ],
+      children: [Icon(icon, size: 22), const SizedBox(width: 10), Text(label)],
     );
   }
 }

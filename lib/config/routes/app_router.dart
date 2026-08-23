@@ -7,6 +7,7 @@ import 'package:icebot_kiosk/features/kiosk/presentation/screens/menu_screen.dar
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/order_tracking_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/payment_screen.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/screens/product_detail_screen.dart';
+import 'package:icebot_kiosk/features/client_device/presentation/client_device_setup_screen.dart';
 
 /// App router configuration using GoRouter.
 class AppRouter {
@@ -14,6 +15,7 @@ class AppRouter {
 
   static const String initial = '/';
   static const String menu = '/menu';
+  static const String setup = '/setup';
   static const String productDetail = '/products/:menuItemId';
   static const String cart = '/cart';
   static const String checkout = '/checkout';
@@ -36,6 +38,11 @@ class AppRouter {
         builder: (BuildContext context, GoRouterState state) {
           return const KioskSplashScreen();
         },
+      ),
+      GoRoute(
+        path: setup,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ClientDeviceSetupScreen(),
       ),
       GoRoute(
         path: menu,

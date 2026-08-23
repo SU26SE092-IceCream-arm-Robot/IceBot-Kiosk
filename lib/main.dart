@@ -7,6 +7,7 @@ import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_session_manager.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 
@@ -40,10 +41,6 @@ class MyApp extends StatelessWidget {
       },
     );
 
-    if (!AppConfig.hasKioskId && kioskController == null) {
-      return app;
-    }
-
     return KioskScope(
       controller: kioskController ?? _buildKioskController(),
       disposeController: kioskController == null,
@@ -57,6 +54,10 @@ class MyApp extends StatelessWidget {
       orderRepository: di.sl<OrderRepository>(),
       paymentRepository: di.sl<PaymentRepository>(),
       orderRecoveryStore: di.sl<OrderRecoveryStore>(),
+      clientDeviceSession: AppConfig.demoMode
+          ? null
+          : di.sl<ClientDeviceSessionManager>(),
+      kioskId: AppConfig.demoMode ? AppConfig.demoKioskId : null,
     );
   }
 }

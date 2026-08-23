@@ -320,7 +320,7 @@ class _ProductImage extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
-      child: item.imageUrl == null || item.imageUrl!.isEmpty
+      child: item.image?.detailUrl.isEmpty ?? true
           ? Container(
               decoration: BoxDecoration(
                 color: colorScheme.primaryContainer,
@@ -338,7 +338,7 @@ class _ProductImage extends StatelessWidget {
               ),
             )
           : CachedNetworkImage(
-              imageUrl: item.imageUrl!,
+              imageUrl: item.image!.detailUrl,
               fit: BoxFit.cover,
               errorWidget: (context, url, error) => LayoutBuilder(
                 builder: (context, constraints) => Container(

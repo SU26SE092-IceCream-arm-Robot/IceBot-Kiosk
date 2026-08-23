@@ -10,11 +10,7 @@ import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.da
 ///
 /// Fully tappable card prioritizing the product image.
 class ProductCard extends StatelessWidget {
-  const ProductCard({
-    required this.item,
-    required this.onTap,
-    super.key,
-  });
+  const ProductCard({required this.item, required this.onTap, super.key});
 
   final RuntimeMenuItem item;
   final VoidCallback onTap;
@@ -43,7 +39,7 @@ class ProductCard extends StatelessWidget {
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(IceBotSpacing.cardRadius),
                       ),
-                      child: item.imageUrl == null || item.imageUrl!.isEmpty
+                      child: item.image?.cardUrl.isEmpty ?? true
                           ? Container(
                               color: scheme.primaryContainer,
                               child: Icon(
@@ -53,7 +49,7 @@ class ProductCard extends StatelessWidget {
                               ),
                             )
                           : CachedNetworkImage(
-                              imageUrl: item.imageUrl!,
+                              imageUrl: item.image!.cardUrl,
                               fit: BoxFit.cover,
                               errorWidget: (context, url, error) => Container(
                                 color: scheme.primaryContainer,
@@ -76,10 +72,7 @@ class ProductCard extends StatelessWidget {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black38,
-                            ],
+                            colors: [Colors.transparent, Colors.black38],
                           ),
                         ),
                       ),
@@ -89,10 +82,15 @@ class ProductCard extends StatelessWidget {
                       left: 16,
                       bottom: 16,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(IceBotSpacing.pillRadius),
+                          borderRadius: BorderRadius.circular(
+                            IceBotSpacing.pillRadius,
+                          ),
                           boxShadow: const [
                             BoxShadow(
                               color: Colors.black26,
@@ -102,8 +100,12 @@ class ProductCard extends StatelessWidget {
                           ],
                         ),
                         child: Text(
-                          KioskFormatters.money(item.finalPrice, currency: item.currency),
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          KioskFormatters.money(
+                            item.finalPrice,
+                            currency: item.currency,
+                          ),
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
                                 color: IceBotColors.icePrimary,
                                 fontSize: 20,
                               ),
@@ -125,17 +127,20 @@ class ProductCard extends StatelessWidget {
                         item.displayName,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontSize: 22,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineMedium?.copyWith(fontSize: 22),
                       ),
                       const SizedBox(height: 8),
                       // Prep time / options info
                       const Spacer(),
-                      if (item.preparationTimeSeconds != null && item.preparationTimeSeconds! > 0)
+                      if (item.preparationTimeSeconds != null &&
+                          item.preparationTimeSeconds! > 0)
                         KioskInfoPill(
                           icon: Icons.timer_outlined,
-                          label: KioskFormatters.durationSeconds(item.preparationTimeSeconds),
+                          label: KioskFormatters.durationSeconds(
+                            item.preparationTimeSeconds,
+                          ),
                           backgroundColor: const Color(0xFFFFF7ED),
                           foregroundColor: const Color(0xFF8A5200),
                         ),

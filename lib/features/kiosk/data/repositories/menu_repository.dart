@@ -7,9 +7,9 @@ class MenuRepository {
 
   final DioClient _client;
 
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     final result = await _client.getResult<RuntimeMenuResult>(
-      '/api/v1/kiosks/$kioskId/runtime-menu',
+      '/api/v1/runtime/menu',
       fromJson: RuntimeMenuResult.fromJson,
     );
 

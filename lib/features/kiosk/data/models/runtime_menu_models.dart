@@ -50,7 +50,7 @@ class RuntimeMenuItem {
     required this.finalPrice,
     required this.currency,
     this.preparationTimeSeconds,
-    this.imageUrl,
+    this.image,
     this.recipeVersion,
     this.optionGroups = const [],
   });
@@ -71,7 +71,7 @@ class RuntimeMenuItem {
   final double finalPrice;
   final String currency;
   final int? preparationTimeSeconds;
-  final String? imageUrl;
+  final RuntimeMenuImage? image;
   final int? recipeVersion;
   final List<RuntimeMenuOptionGroup> optionGroups;
 
@@ -103,7 +103,7 @@ class RuntimeMenuItem {
       finalPrice: _readDouble(map['finalPrice']),
       currency: map['currency'] as String? ?? 'VND',
       preparationTimeSeconds: _readInt(map['preparationTimeSeconds']),
-      imageUrl: map['imageUrl'] as String?,
+      image: map['image'] == null ? null : RuntimeMenuImage.fromJson(map['image']),
       recipeVersion: _readInt(map['recipeVersion']),
       optionGroups: _readList(
         map['optionGroups'],
@@ -119,6 +119,23 @@ class RuntimeMenuItem {
         .where((option) => selected.contains(option.productOptionId))
         .fold<double>(0, (total, option) => total + option.priceDelta);
     return finalPrice + optionTotal;
+  }
+}
+
+class RuntimeMenuImage {
+  const RuntimeMenuImage({required this.cardUrl, required this.detailUrl, this.altText});
+
+  final String cardUrl;
+  final String detailUrl;
+  final String? altText;
+
+  factory RuntimeMenuImage.fromJson(Object? json) {
+    final map = _asMap(json);
+    return RuntimeMenuImage(
+      cardUrl: map['cardUrl'] as String? ?? '',
+      detailUrl: map['detailUrl'] as String? ?? '',
+      altText: map['altText'] as String?,
+    );
   }
 }
 

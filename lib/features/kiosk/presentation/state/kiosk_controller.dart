@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_session_manager.dart';
 import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/order_models.dart';
 import 'package:icebot_kiosk/features/kiosk/data/models/payment_models.dart';
@@ -15,23 +16,22 @@ class KioskController extends ChangeNotifier {
     required OrderRepository orderRepository,
     required PaymentRepository paymentRepository,
     OrderRecoveryStore? orderRecoveryStore,
+    ClientDeviceSessionManager? clientDeviceSession,
     String? kioskId,
   }) : _menuRepository = menuRepository,
        _orderRepository = orderRepository,
        _paymentRepository = paymentRepository,
        _orderRecoveryStore =
            orderRecoveryStore ?? const NoopOrderRecoveryStore(),
-       _kioskId = kioskId?.trim().isNotEmpty == true
-           ? kioskId!.trim()
-           : AppConfig.effectiveKioskId,
-       _hasKioskId = kioskId?.trim().isNotEmpty == true || AppConfig.hasKioskId;
+       _clientDeviceSession = clientDeviceSession,
+       _testKioskId = kioskId?.trim() ?? '';
 
   final MenuRepository _menuRepository;
   final OrderRepository _orderRepository;
   final PaymentRepository _paymentRepository;
   final OrderRecoveryStore _orderRecoveryStore;
-  final String _kioskId;
-  final bool _hasKioskId;
+  final ClientDeviceSessionManager? _clientDeviceSession;
+  final String _testKioskId;
 
   RuntimeMenuResult? _menu;
   ApiException? _menuError;
@@ -103,8 +103,18 @@ class KioskController extends ChangeNotifier {
     return _activePaymentStatus?.canRetryPayment ?? order.canRetryPayment;
   }
 
+  Future<String?> _resolveKioskId() async {
+    final session = _clientDeviceSession;
+    if (session == null) return _testKioskId.isEmpty ? null : _testKioskId;
+    return (await session.ensureSession())?.kioskId;
+  }
+
+  String? get _knownKioskId =>
+      _clientDeviceSession?.kioskId ??
+      (_testKioskId.isEmpty ? null : _testKioskId);
+
   Future<OrderResult?> restoreActiveOrder() async {
-    if (!_hasKioskId || _isRestoringOrder) {
+    if (_isRestoringOrder) {
       return null;
     }
 
@@ -113,7 +123,16 @@ class KioskController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final recovery = await _orderRecoveryStore.read(_kioskId);
+      final kioskId = await _resolveKioskId();
+      if (kioskId == null) {
+        _recoveryError = const ApiException(
+          type: ApiErrorType.unauthorized,
+          statusCode: 401,
+          message: 'Tablet is not configured or is no longer authorized.',
+        );
+        return null;
+      }
+      final recovery = await _orderRecoveryStore.read(kioskId);
       if (recovery == null) {
         return null;
       }
@@ -132,7 +151,7 @@ class KioskController extends ChangeNotifier {
         recovery.orderId,
         orderAccessToken: accessToken,
       );
-      if (order.id != recovery.orderId || order.kioskId != _kioskId) {
+      if (order.id != recovery.orderId || order.kioskId != kioskId) {
         await _orderRecoveryStore.clear();
         return null;
       }
@@ -185,7 +204,7 @@ class KioskController extends ChangeNotifier {
   }
 
   Future<void> loadMenu({bool force = false}) async {
-    if (!_hasKioskId) {
+    if (await _resolveKioskId() == null) {
       _menuError = const ApiException(
         type: ApiErrorType.validation,
         message: 'Kiosk chưa được cấu hình. Vui lòng thiết lập Kiosk ID.',
@@ -205,7 +224,7 @@ class KioskController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final menu = await _menuRepository.getRuntimeMenu(_kioskId);
+      final menu = await _menuRepository.getRuntimeMenu();
       _menu = menu;
       _reconcileCartWith(menu);
       _menuError = null;
@@ -341,7 +360,7 @@ class KioskController extends ChangeNotifier {
     if (_isCheckingOut) {
       return null;
     }
-    if (!_hasKioskId) {
+    if (await _resolveKioskId() == null) {
       return _rejectCheckout(
         const ApiException(
           type: ApiErrorType.validation,
@@ -673,7 +692,6 @@ class KioskController extends ChangeNotifier {
     return _CheckoutIntent(
       cartFingerprint: cartFingerprint,
       orderRequest: CreateOrderRequest(
-        kioskId: _kioskId,
         idempotencyKey: 'tablet-order-$nonce',
         clientOrderId: 'tablet-$nonce',
         runtimeSnapshotId: _menu!.snapshotId,
@@ -975,7 +993,9 @@ class KioskController extends ChangeNotifier {
   }
 
   void _validateTrackedOrder(OrderResult order, String orderId) {
-    if (order.id.isEmpty || order.id != orderId || order.kioskId != _kioskId) {
+    if (order.id.isEmpty ||
+        order.id != orderId ||
+        order.kioskId != _knownKioskId) {
       throw const ApiException(
         type: ApiErrorType.unknown,
         message: 'Trạng thái đơn hàng từ máy chủ không hợp lệ.',

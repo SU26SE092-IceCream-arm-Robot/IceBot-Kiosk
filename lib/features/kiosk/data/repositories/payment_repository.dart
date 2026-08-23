@@ -25,7 +25,7 @@ class PaymentRepository {
       );
     }
     final result = await _client.postResult<PaymentSessionResult>(
-      '/api/v1/orders/$orderId/payment-sessions',
+      '/api/v1/runtime/orders/$orderId/payment-sessions',
       data: {
         'paymentMethodCode': paymentMethodCode.trim(),
         'expectedAmount': expectedAmount,

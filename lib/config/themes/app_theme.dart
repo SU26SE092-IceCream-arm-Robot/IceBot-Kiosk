@@ -156,10 +156,7 @@ class AppTheme {
           letterSpacing: -0.2,
           color: IceBotColors.botNavy,
         ),
-        iconTheme: IconThemeData(
-          color: IceBotColors.botNavy,
-          size: 28,
-        ),
+        iconTheme: IconThemeData(color: IceBotColors.botNavy, size: 28),
       ),
 
       // FilledButton — IcePrimaryButton style applied globally ────────────────
@@ -211,10 +208,7 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: IceBotColors.icePrimary,
           minimumSize: const Size(64, IceBotSpacing.minTouchTarget),
-          textStyle: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
 

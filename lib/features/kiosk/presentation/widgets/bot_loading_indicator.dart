@@ -21,11 +21,7 @@ import 'package:flutter/material.dart';
 /// BotLoadingIndicator(size: 56)
 /// ```
 class BotLoadingIndicator extends StatefulWidget {
-  const BotLoadingIndicator({
-    this.size = 40,
-    this.color,
-    super.key,
-  });
+  const BotLoadingIndicator({this.size = 40, this.color, super.key});
 
   final double size;
   final Color? color;
@@ -49,17 +45,20 @@ class _BotLoadingIndicatorState extends State<BotLoadingIndicator>
       duration: const Duration(milliseconds: 1200),
     );
 
-    _scale = Tween<double>(begin: 0.72, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 0.72,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _opacity = Tween<double>(begin: 0.55, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _opacity = Tween<double>(
+      begin: 0.55,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _ringScale = Tween<double>(begin: 1.0, end: 1.55).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _ringScale = Tween<double>(
+      begin: 1.0,
+      end: 1.55,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     _controller.repeat(reverse: true);
   }
@@ -176,11 +175,7 @@ class _StaticDot extends StatelessWidget {
 /// BotBeamScanner(height: 5)
 /// ```
 class BotBeamScanner extends StatefulWidget {
-  const BotBeamScanner({
-    this.height = 5,
-    this.color,
-    super.key,
-  });
+  const BotBeamScanner({this.height = 5, this.color, super.key});
 
   final double height;
   final Color? color;

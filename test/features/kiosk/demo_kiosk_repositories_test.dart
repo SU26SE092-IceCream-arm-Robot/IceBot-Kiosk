@@ -14,7 +14,7 @@ void main() {
       final orderRepository = DemoOrderRepository(store);
       final paymentRepository = DemoPaymentRepository(store);
 
-      final menu = await menuRepository.getRuntimeMenu(AppConfig.demoKioskId);
+      final menu = await menuRepository.getRuntimeMenu();
       expect(menu.items, hasLength(4));
       expect(menu.containsMachineRuntimeState, isFalse);
       expect(menu.availabilitySource, 'DemoLocalData');
@@ -23,7 +23,6 @@ void main() {
       final item = menu.items.first;
       final order = await orderRepository.createOrder(
         CreateOrderRequest(
-          kioskId: AppConfig.demoKioskId,
           runtimeSnapshotId: menu.snapshotId,
           runtimeSnapshotGeneratedAt: menu.generatedAt,
           clientTotalAmount: item.finalPrice,

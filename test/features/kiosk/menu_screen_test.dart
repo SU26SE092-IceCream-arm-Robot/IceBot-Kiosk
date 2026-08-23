@@ -169,7 +169,7 @@ class _StubMenuRepository extends MenuRepository {
   final Object response;
 
   @override
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     if (response is ApiException) {
       throw response;
     }

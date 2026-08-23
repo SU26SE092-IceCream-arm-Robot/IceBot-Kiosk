@@ -17,14 +17,9 @@ void main() {
         DioClient(baseUrl: 'https://api.icebot.test', dio: dio),
       );
 
-      final menu = await repository.getRuntimeMenu(
-        'aec68c48-207d-433d-b2fd-e7ddf7d5346a',
-      );
+      final menu = await repository.getRuntimeMenu();
 
-      expect(
-        adapter.lastRequest?.uri.path,
-        '/api/v1/kiosks/aec68c48-207d-433d-b2fd-e7ddf7d5346a/runtime-menu',
-      );
+      expect(adapter.lastRequest?.uri.path, '/api/v1/runtime/menu');
       expect(menu.availabilitySource, 'CloudSalesCatalog');
       expect(menu.containsMachineRuntimeState, isFalse);
       expect(menu.items.single.displayName, 'Kem Vanilla');
@@ -38,7 +33,7 @@ void main() {
     },
   );
 
-  test('real repository maps backend 404 for invalid kiosk', () async {
+  test('real repository maps runtime authorization rejection', () async {
     final adapter = _RuntimeMenuAdapter(
       statusCode: 404,
       body: {
@@ -53,7 +48,7 @@ void main() {
     );
 
     await expectLater(
-      repository.getRuntimeMenu('00000000-0000-0000-0000-000000000000'),
+      repository.getRuntimeMenu(),
       throwsA(
         isA<ApiException>().having(
           (error) => error.type,

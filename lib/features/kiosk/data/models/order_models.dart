@@ -32,33 +32,28 @@ enum PaymentStatus {
 
 class CreateOrderRequest {
   const CreateOrderRequest({
-    required this.kioskId,
     required this.items,
     this.idempotencyKey,
     this.clientOrderId,
     this.runtimeSnapshotId,
     this.runtimeSnapshotGeneratedAt,
     this.clientTotalAmount,
-    this.channel = AppConfig.appChannel,
     this.customerName,
     this.customerPhoneNumber,
     this.notes,
   });
 
-  final String kioskId;
   final String? idempotencyKey;
   final String? clientOrderId;
   final String? runtimeSnapshotId;
   final DateTime? runtimeSnapshotGeneratedAt;
   final double? clientTotalAmount;
-  final String channel;
   final String? customerName;
   final String? customerPhoneNumber;
   final String? notes;
   final List<CreateOrderItemRequest> items;
 
   Map<String, dynamic> toJson() => _removeNulls({
-    'kioskId': kioskId,
     'clientOrderId': clientOrderId,
     'clientTotalAmount': clientTotalAmount,
     'customerName': customerName,
