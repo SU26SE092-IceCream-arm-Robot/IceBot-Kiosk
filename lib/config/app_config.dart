@@ -6,12 +6,7 @@ class AppConfig {
 
   static const String rawApiBaseUrl = String.fromEnvironment(
     'ICEBOT_API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:5000',
-  );
-
-  static const String kioskId = String.fromEnvironment(
-    'ICEBOT_KIOSK_ID',
-    defaultValue: '',
+    defaultValue: 'https://api.icebot.io.vn',
   );
 
   static const bool demoMode = bool.fromEnvironment(
@@ -30,20 +25,14 @@ class AppConfig {
 
   static String get apiBaseUrl => normalizeBaseUrl(rawApiBaseUrl);
 
-  static String get effectiveKioskId =>
-      kioskId.trim().isNotEmpty ? kioskId.trim() : demoKioskId;
-
-  static bool get hasKioskId => demoMode || kioskId.trim().isNotEmpty;
-
   static bool get isProductionBuild => kReleaseMode && !demoMode;
 
   /// Null when the current compile-time configuration is safe to start.
   ///
   /// Development builds may use an explicit local HTTP backend. Release builds
-  /// require a direct HTTPS origin and a real kiosk identity.
+  /// require a direct HTTPS origin; kiosk identity is resolved after login.
   static String? get runtimeConfigurationError => validateRuntimeConfiguration(
     rawApiUrl: rawApiBaseUrl,
-    kioskIdentity: kioskId,
     paymentCode: paymentMethodCode,
     isDemoMode: demoMode,
     isReleaseBuild: kReleaseMode,
@@ -51,21 +40,12 @@ class AppConfig {
 
   static String? validateRuntimeConfiguration({
     required String rawApiUrl,
-    required String kioskIdentity,
     required String paymentCode,
     required bool isDemoMode,
     required bool isReleaseBuild,
   }) {
     if (isDemoMode) {
       return null;
-    }
-
-    if (kioskIdentity.trim().isEmpty) {
-      return 'Thiếu ICEBOT_KIOSK_ID. Vui lòng cấu hình mã kiosk trước khi chạy.';
-    }
-
-    if (!_isGuid(kioskIdentity.trim())) {
-      return 'ICEBOT_KIOSK_ID phải là mã UUID hợp lệ của kiosk.';
     }
 
     if (paymentCode.trim().isEmpty) {
@@ -103,12 +83,6 @@ class AppConfig {
     }
 
     return trimmed.replaceFirst(RegExp(r'/+$'), '');
-  }
-
-  static bool _isGuid(String value) {
-    return RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
-    ).hasMatch(value);
   }
 
   static bool _isLoopbackHost(String host) {

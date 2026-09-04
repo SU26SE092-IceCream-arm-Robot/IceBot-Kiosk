@@ -10,12 +10,12 @@ The app reads compile-time values through `--dart-define`:
 | Variable | Purpose | Example |
 | --- | --- | --- |
 | `ICEBOT_API_BASE_URL` | IceBot backend origin, without a trailing API path | `http://127.0.0.1:5000` or `https://api.icebot.io.vn` |
-| `ICEBOT_KIOSK_ID` | Kiosk GUID used by runtime menu and order APIs | `aec68c48-207d-433d-b2fd-e7ddf7d5346a` |
 | `ICEBOT_DEMO_MODE` | Uses isolated local demo repositories when `true` | `false` |
 
-The listed kiosk ID is existing integration-test data. Confirm that its
-organization, store, kiosk, menu, and products are active before each E2E run.
-Do not put production credentials or payment secrets in Dart defines.
+Prepare a Manager account with exactly one store scope. Confirm that its
+organization, store, kiosks, menu, and products are active before each E2E
+run. Test both a store with one kiosk and a store with multiple kiosks. Do not
+put credentials or payment secrets in Dart defines.
 
 ## 1. Start the Local Backend
 
@@ -67,13 +67,12 @@ manifest; release builds remain HTTPS-oriented.
 cd D:\FPT\Capstone\IceBot\Projects_Kiosk\IceBot-Kiosk
 
 $deviceId = "<ANDROID_DEVICE_SERIAL>"
-$kioskId = "aec68c48-207d-433d-b2fd-e7ddf7d5346a"
-
 flutter run -d $deviceId `
   --dart-define=ICEBOT_API_BASE_URL=http://127.0.0.1:5000 `
-  --dart-define=ICEBOT_KIOSK_ID=$kioskId `
   --dart-define=ICEBOT_DEMO_MODE=false
 ```
+
+Sign in on the setup screen with the prepared local Manager account.
 
 Remove the port mapping after testing if needed:
 
@@ -89,20 +88,17 @@ No `adb reverse` is required. The device must have Internet access:
 cd D:\FPT\Capstone\IceBot\Projects_Kiosk\IceBot-Kiosk
 
 $deviceId = "<ANDROID_DEVICE_SERIAL>"
-$kioskId = "aec68c48-207d-433d-b2fd-e7ddf7d5346a"
-
 flutter run -d $deviceId `
   --dart-define=ICEBOT_API_BASE_URL=https://api.icebot.io.vn `
-  --dart-define=ICEBOT_KIOSK_ID=$kioskId `
   --dart-define=ICEBOT_DEMO_MODE=false
 ```
 
-Confirm the deployed environment contains the kiosk and menu data before
-testing. Do not assume local database IDs exist in the deployed database.
+Sign in with the production Manager for the target point of sale. Confirm the
+deployed environment contains the assigned kiosk and menu data before testing.
 
 ## 5. Run the Isolated Demo Flow
 
-Demo mode does not call the backend and does not require a kiosk ID:
+Demo mode does not call the backend and does not require Manager login:
 
 ```powershell
 flutter run -d <ANDROID_DEVICE_SERIAL> `
@@ -114,22 +110,27 @@ payment or robot progress as real.
 
 ## 6. Customer Flow Checklist
 
-1. Splash loads without configuration or overflow errors.
-2. Runtime menu displays real backend items.
-3. Product detail uses the selected runtime menu item.
-4. Cart quantity and total remain consistent with the refreshed menu.
-5. Checkout creates one order after repeated taps.
-6. Payment session shows backend QR payload or checkout URL only.
-7. Paid navigation enters order tracking, not a fake success screen.
-8. Tracking displays the backend order status:
+1. An unconfigured device shows the Manager login screen.
+2. Manager login automatically resolves one kiosk, or lets the Manager choose
+   a kiosk when the store has multiple kiosks; the selection survives an app
+   restart.
+3. Runtime menu displays real backend items.
+4. Product detail uses the selected runtime menu item.
+5. Cart quantity and total remain consistent with the refreshed menu.
+6. Checkout creates one order after repeated taps.
+7. Payment session shows backend QR payload or checkout URL only.
+8. Paid navigation enters order tracking, not a fake success screen.
+9. Tracking displays the backend order status:
    - `ReadyForFulfillment`: `Sẵn sàng hoàn tất đơn`
    - `FulfillmentIssue`: `Cần hỗ trợ hoàn tất đơn`
    - `Accepted`: `Hệ thống đã nhận đơn`
    - `Preparing`: `Robot đang chuẩn bị`
    - `Ready`: pickup guidance
    - terminal failure/refund states: staff-support guidance
-9. `Về menu` resets the kiosk session only from an allowed safe state.
-10. A new customer starts with an empty cart and no previous order UI.
+10. `Về menu` resets the kiosk session only from an allowed safe state.
+11. Manager logout is blocked during an active order and otherwise returns the
+    device to setup state.
+12. A new customer starts with an empty cart and no previous order UI.
 
 ## 7. Recovery and Network Scenarios
 

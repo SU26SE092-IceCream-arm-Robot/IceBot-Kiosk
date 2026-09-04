@@ -7,6 +7,9 @@ import 'package:icebot_kiosk/features/kiosk/data/repositories/demo_kiosk_reposit
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository.dart';
+import 'package:icebot_kiosk/features/setup/data/local/auth_session_store.dart';
+import 'package:icebot_kiosk/features/setup/data/repositories/auth_repository.dart';
+import 'package:icebot_kiosk/features/setup/presentation/state/auth_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final GetIt sl = GetIt.instance;
@@ -18,6 +21,9 @@ Future<void> init() async {
   sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
   sl.registerLazySingleton<FlutterSecureStorage>(
     () => const FlutterSecureStorage(),
+  );
+  sl.registerLazySingleton<AuthSessionStore>(
+    () => SecureAuthSessionStore(sl<FlutterSecureStorage>()),
   );
   sl.registerLazySingleton<OrderAccessTokenStore>(
     () => SecureOrderAccessTokenStore(sl<FlutterSecureStorage>()),
@@ -34,6 +40,15 @@ Future<void> init() async {
   // Network
   sl.registerLazySingleton<DioClient>(
     () => DioClient(baseUrl: AppConfig.apiBaseUrl),
+  );
+  sl.registerLazySingleton<AuthRepository>(
+    () => AuthRepository(DioClient(baseUrl: AppConfig.apiBaseUrl)),
+  );
+  sl.registerLazySingleton<AuthController>(
+    () => AuthController(
+      repository: sl<AuthRepository>(),
+      sessionStore: sl<AuthSessionStore>(),
+    ),
   );
 
   // Kiosk runtime/customer API repositories

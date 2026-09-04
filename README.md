@@ -24,7 +24,7 @@ No `.env` file, no secrets, no platform-specific configuration files are needed.
 
 - Flutter SDK (see `pubspec.yaml` for the SDK constraint)
 - A running IceBot Backend instance
-- A valid Kiosk ID registered in the local database
+- A Manager account assigned to one store or kiosk
 
 ### Run against a local backend
 
@@ -32,9 +32,13 @@ No `.env` file, no secrets, no platform-specific configuration files are needed.
 cd D:\FPT\Capstone\IceBot\Projects_Kiosk\IceBot-Kiosk
 
 flutter run -d windows `
-  --dart-define=ICEBOT_API_BASE_URL=http://localhost:5000 `
-  --dart-define=ICEBOT_KIOSK_ID=<LOCAL_KIOSK_ID>
+  --dart-define=ICEBOT_API_BASE_URL=http://localhost:5000
 ```
+
+On first launch, sign in with the Manager account for the target store. If the
+store has more than one kiosk, select this physical machine from the kiosk list.
+The app securely stores that binding; it is no longer compiled into the
+executable.
 
 > **Note:** `ICEBOT_DEMO_MODE` defaults to `false` and does not need to be specified
 > unless you are explicitly testing demo mode.
@@ -44,7 +48,6 @@ flutter run -d windows `
 | Variable | Default | Description |
 |---|---|---|
 | `ICEBOT_API_BASE_URL` | `http://10.0.2.2:5000` | Backend origin (no trailing slash, no path) |
-| `ICEBOT_KIOSK_ID` | *(empty)* | Kiosk GUID registered in the backend database |
 | `ICEBOT_DEMO_MODE` | `false` | Set to `true` only for isolated offline demo |
 | `ICEBOT_PAYMENT_METHOD_CODE` | `payos` | Payment method code registered in the backend |
 
@@ -62,7 +65,7 @@ flutter test
 Demo mode replaces all backend repositories with local in-memory stubs.
 **It does not contact the backend at all.**
 
-Demo mode does **not** require a Kiosk ID or a backend URL.
+Demo mode does **not** require Manager login or a backend URL.
 
 ```powershell
 flutter run -d windows `
@@ -79,13 +82,13 @@ A visible orange "Chế độ demo" badge appears in the bottom-right corner of 
 ## 3. Production Smoke Test
 
 Use the helper script to run the kiosk in Flutter debug mode against the live production backend.  
-Run this **before** cutting a release build to verify the production Kiosk ID is valid.
+Run this **before** cutting a release build to verify Manager login and kiosk resolution.
 
 ```powershell
 cd D:\FPT\Capstone\IceBot\Projects_Kiosk\IceBot-Kiosk
 
 .\scripts\run-production.ps1 `
-  -KioskId "<PRODUCTION_KIOSK_ID>"
+  -ApiBaseUrl "https://api.icebot.io.vn"
 ```
 
 The script defaults `ApiBaseUrl` to `https://api.icebot.io.vn` and `DemoMode` to `false`.
@@ -95,12 +98,11 @@ The script defaults `ApiBaseUrl` to `https://api.icebot.io.vn` and `DemoMode` to
 ```powershell
 flutter run -d windows `
   --dart-define=ICEBOT_API_BASE_URL=https://api.icebot.io.vn `
-  --dart-define=ICEBOT_KIOSK_ID=<PRODUCTION_KIOSK_ID> `
   --dart-define=ICEBOT_DEMO_MODE=false
 ```
 
-> **`<PRODUCTION_KIOSK_ID>`** must be obtained from the **IceBot Admin Web → Kiosk Management**
-> for the production environment. Do not assume local database IDs exist in production.
+Use the Manager login screen to link the machine to its production store and
+kiosk. Logging out removes that binding and returns the app to setup state.
 
 ---
 
@@ -111,8 +113,7 @@ flutter run -d windows `
 ```powershell
 cd D:\FPT\Capstone\IceBot\Projects_Kiosk\IceBot-Kiosk
 
-.\scripts\build-production.ps1 `
-  -KioskId "<PRODUCTION_KIOSK_ID>"
+.\scripts\build-production.ps1
 ```
 
 ### Manual equivalent
@@ -120,7 +121,6 @@ cd D:\FPT\Capstone\IceBot\Projects_Kiosk\IceBot-Kiosk
 ```powershell
 flutter build windows --release `
   --dart-define=ICEBOT_API_BASE_URL=https://api.icebot.io.vn `
-  --dart-define=ICEBOT_KIOSK_ID=<PRODUCTION_KIOSK_ID> `
   --dart-define=ICEBOT_DEMO_MODE=false
 ```
 
@@ -149,8 +149,7 @@ flutter build windows --release `
 
 ```powershell
 .\installer\build-msi.ps1 `
-  -ApiBaseUrl "https://api.icebot.io.vn" `
-  -KioskId "<PRODUCTION_KIOSK_ID>"
+  -ApiBaseUrl "https://api.icebot.io.vn"
 ```
 
 Output MSI: `dist\windows\IceBot_Kiosk_1.0.0.msi`  
@@ -163,22 +162,18 @@ See [`installer\README.md`](installer/README.md) for WiX prerequisites.
 | Item | Value |
 |---|---|
 | `ICEBOT_API_BASE_URL` | `https://api.icebot.io.vn` |
-| `ICEBOT_KIOSK_ID` | Obtain from IceBot Admin Web → Kiosk Management (production) |
 | `ICEBOT_DEMO_MODE` | `false` (must be explicit — never omit) |
 | `ICEBOT_PAYMENT_METHOD_CODE` | `payos` (or the code configured in the production backend) |
 
-### ⚠️ Production Kiosk ID
+### Runtime kiosk setup
 
-**The local Kiosk ID used during development (`019fb380-5502-7b35-a6e0-dacfa5d42687`)
-was created against the local development database.**
+On an unconfigured machine:
 
-It **cannot** be assumed to exist in the production database.
-
-**Before the first production deployment:**
-1. Log in to the IceBot Admin Web (production environment).
-2. Navigate to **Kiosk Management**.
-3. Create or select the kiosk entry for this physical machine.
-4. Copy the Kiosk GUID and use it as `ICEBOT_KIOSK_ID`.
+1. Launch the app and sign in with the Manager account for the point of sale.
+2. The account must have exactly one Manager scope.
+3. If the store has multiple kiosks, choose the kiosk represented by this physical machine.
+4. The app stores the resulting session and kiosk binding in secure storage.
+5. Use the settings action on the menu to log out and reset the machine.
 
 ### What is not stored in the Kiosk
 
@@ -206,8 +201,8 @@ flutter analyze
 # Unit tests
 flutter test
 
-# Release build (dry-run — supply a real Kiosk ID)
-.\scripts\build-production.ps1 -KioskId "<PRODUCTION_KIOSK_ID>"
+# Release build
+.\scripts\build-production.ps1
 ```
 
 | Check | Expected |
@@ -217,10 +212,10 @@ flutter test
 | Production release build succeeds | Exit code 0 |
 | API base URL resolves to `https://api.icebot.io.vn` | ✅ |
 | Demo mode is `false` | ✅ |
-| A real production Kiosk ID is configured | ✅ |
+| Manager login resolves or lets Manager select a production kiosk | ✅ |
 | Runtime menu loads for that Kiosk | Splash → Menu screen visible |
 | No localhost URL is used at runtime | ✅ (blocked by AppConfig in release) |
-| No development fallback is silently used | ✅ (AppConfig halts on missing Kiosk ID) |
+| No development fallback is silently used | ✅ (release requires a valid HTTPS API URL) |
 | No secret is included in source or CLI examples | ✅ |
 | Customer ordering uses existing Backend contract | ✅ |
 | Payment flow uses Backend `/api/v1/orders/{id}/payment-sessions` | ✅ |

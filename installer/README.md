@@ -1,8 +1,9 @@
 # IceBot Kiosk Windows MSI
 
-The MSI packages the complete Flutter Windows release directory. Runtime API
-and kiosk identity values are compiled into the Flutter release with
-`--dart-define`; the installer does not contain credentials or payment secrets.
+The MSI packages the complete Flutter Windows release directory. The runtime API
+origin is compiled into the release with `--dart-define`; kiosk identity is linked
+after installation through Manager login. The installer does not contain
+credentials or payment secrets.
 
 ## One-time WiX setup
 
@@ -19,7 +20,6 @@ dotnet tool install wix `
 ```powershell
 .\installer\build-msi.ps1 `
   -ApiBaseUrl "https://backend.example" `
-  -KioskId "00000000-0000-0000-0000-000000000000" `
   -Version "1.0.0"
 ```
 

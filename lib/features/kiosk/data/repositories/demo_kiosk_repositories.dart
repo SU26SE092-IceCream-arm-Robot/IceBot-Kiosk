@@ -18,7 +18,7 @@ class DemoKioskStore {
     final now = _clock().toUtc();
     return RuntimeMenuResult(
       snapshotId: _DemoIds.snapshotId,
-      kioskId: AppConfig.effectiveKioskId,
+      kioskId: AppConfig.demoKioskId,
       generatedAt: now,
       expiresAt: now.add(const Duration(minutes: 10)),
       availabilitySource: 'DemoLocalData',
@@ -216,7 +216,7 @@ class DemoKioskStore {
   OrderResult _buildOrder(_DemoOrderRecord record) {
     return OrderResult(
       id: record.orderId,
-      kioskId: AppConfig.effectiveKioskId,
+      kioskId: AppConfig.demoKioskId,
       storeId: _DemoIds.storeId,
       organizationId: _DemoIds.organizationId,
       orderNumber: record.orderNumber,

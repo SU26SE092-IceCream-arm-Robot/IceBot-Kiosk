@@ -61,9 +61,9 @@ class FloatingCartBadge extends StatelessWidget {
                 Text(
                   totalPriceFormatted,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 const Icon(

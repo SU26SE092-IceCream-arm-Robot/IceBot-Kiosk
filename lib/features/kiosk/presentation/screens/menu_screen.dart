@@ -9,6 +9,7 @@ import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_error_pan
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_formatters.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/product_card.dart';
+import 'package:icebot_kiosk/features/setup/presentation/state/auth_scope.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -152,6 +153,61 @@ class _MenuScreenState extends State<MenuScreen> {
 class _StorefrontHeader extends StatelessWidget {
   const _StorefrontHeader();
 
+  Future<void> _requestLogout(BuildContext context) async {
+    final auth = AuthScope.maybeOf(context);
+    final kiosk = KioskScope.maybeOf(context);
+    if (auth == null || kiosk == null) {
+      return;
+    }
+
+    if (!kiosk.canLogoutManager) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Không thể đăng xuất khi đơn hàng vẫn đang được xử lý.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final session = auth.session;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.logout_rounded),
+        title: const Text('Gỡ thiết lập kiosk?'),
+        content: Text(
+          'Máy sẽ đăng xuất Manager ${session?.managerName ?? ''} và quay về màn hình thiết lập. Thông tin phiên và kiosk đã lưu trên máy sẽ bị xóa.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Đăng xuất'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final prepared = await kiosk.prepareForManagerLogout();
+    if (!prepared || !context.mounted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể xóa phiên kiosk an toàn.')),
+        );
+      }
+      return;
+    }
+    await auth.logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -159,6 +215,7 @@ class _StorefrontHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 560;
+        final auth = AuthScope.maybeOf(context);
         final copy = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -201,6 +258,12 @@ class _StorefrontHeader extends StatelessWidget {
                       const SizedBox(width: 8),
                       const _DemoPill(),
                     ],
+                    if (auth != null) ...[
+                      const SizedBox(width: 6),
+                      _AdminSettingsButton(
+                        onLongPress: () => _requestLogout(context),
+                      ),
+                    ],
                   ],
                 )
               : Row(
@@ -212,11 +275,51 @@ class _StorefrontHeader extends StatelessWidget {
                       const SizedBox(width: 16),
                       const _DemoPill(),
                     ],
+                    if (auth != null) ...[
+                      const SizedBox(width: 8),
+                      _AdminSettingsButton(
+                        filled: true,
+                        onLongPress: () => _requestLogout(context),
+                      ),
+                    ],
                   ],
                 ),
         );
       },
     );
+  }
+}
+
+class _AdminSettingsButton extends StatelessWidget {
+  const _AdminSettingsButton({required this.onLongPress, this.filled = false});
+
+  final VoidCallback onLongPress;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    void explainGesture() {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nhấn giữ nút cài đặt để mở quản lý kiosk.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    final button = filled
+        ? IconButton.filledTonal(
+            tooltip: 'Quản lý kiosk',
+            onPressed: explainGesture,
+            icon: const Icon(Icons.settings_outlined),
+          )
+        : IconButton(
+            tooltip: 'Quản lý kiosk',
+            onPressed: explainGesture,
+            icon: const Icon(Icons.settings_outlined),
+          );
+
+    return GestureDetector(onLongPress: onLongPress, child: button);
   }
 }
 

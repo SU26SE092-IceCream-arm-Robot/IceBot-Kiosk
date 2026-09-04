@@ -9,22 +9,134 @@ import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.d
 import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
+import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
+import 'package:icebot_kiosk/features/setup/presentation/screens/manager_login_screen.dart';
+import 'package:icebot_kiosk/features/setup/presentation/state/auth_controller.dart';
+import 'package:icebot_kiosk/features/setup/presentation/state/auth_scope.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await di.init();
+  final authController = di.sl<AuthController>();
+  await authController.restore();
 
-  runApp(const MyApp());
+  runApp(MyApp(authController: authController));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key, this.kioskController});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key, this.kioskController, this.authController});
 
   final KioskController? kioskController;
+  final AuthController? authController;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  AuthController? _authController;
+  KioskController? _ownedKioskController;
+  String? _ownedKioskId;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachAuthController();
+  }
+
+  @override
+  void didUpdateWidget(MyApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.authController != widget.authController) {
+      _detachAuthController();
+      _attachAuthController();
+    }
+  }
+
+  void _attachAuthController() {
+    _authController =
+        widget.authController ??
+        (di.sl.isRegistered<AuthController>() ? di.sl<AuthController>() : null);
+    _authController?.addListener(_handleAuthChanged);
+  }
+
+  void _detachAuthController() {
+    _authController?.removeListener(_handleAuthChanged);
+    _authController = null;
+  }
+
+  void _handleAuthChanged() {
+    if (!mounted) {
+      return;
+    }
+    if (_authController?.isAuthenticated != true) {
+      _disposeOwnedKioskController();
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _detachAuthController();
+    _disposeOwnedKioskController();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final app = MaterialApp.router(
+    if (AppConfig.demoMode || widget.kioskController != null) {
+      final kioskController =
+          widget.kioskController ?? _controllerFor(AppConfig.demoKioskId);
+      return KioskScope(
+        controller: kioskController,
+        disposeController: false,
+        child: _buildRouterApp(),
+      );
+    }
+
+    final authController = _authController;
+    if (authController == null) {
+      return _buildStaticApp(
+        const KioskEmptyState(
+          title: 'Thiết lập IceBot Kiosk',
+          message: 'Ứng dụng cần được khởi động qua cấu hình hệ thống.',
+          icon: Icons.settings_outlined,
+        ),
+      );
+    }
+
+    if (authController.isRestoring) {
+      return AuthScope(
+        controller: authController,
+        child: _buildStaticApp(
+          const KioskLoadingPanel(
+            title: 'IceBot Kiosk',
+            message: 'Đang khôi phục cấu hình điểm bán.',
+          ),
+        ),
+      );
+    }
+
+    if (!authController.isAuthenticated) {
+      return AuthScope(
+        controller: authController,
+        child: _buildStaticApp(const ManagerLoginScreen()),
+      );
+    }
+
+    final kioskController = _controllerFor(authController.session!.kioskId);
+    return AuthScope(
+      controller: authController,
+      child: KioskScope(
+        controller: kioskController,
+        disposeController: false,
+        child: _buildRouterApp(),
+      ),
+    );
+  }
+
+  Widget _buildRouterApp() {
+    return MaterialApp.router(
       title: 'IceBot Kiosk',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
@@ -39,25 +151,38 @@ class MyApp extends StatelessWidget {
         return _DemoModeFrame(child: child ?? const SizedBox.shrink());
       },
     );
+  }
 
-    if (!AppConfig.hasKioskId && kioskController == null) {
-      return app;
-    }
-
-    return KioskScope(
-      controller: kioskController ?? _buildKioskController(),
-      disposeController: kioskController == null,
-      child: app,
+  Widget _buildStaticApp(Widget child) {
+    return MaterialApp(
+      title: 'IceBot Kiosk',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.light,
+      home: Scaffold(body: KioskBackdrop(child: child)),
     );
   }
 
-  KioskController _buildKioskController() {
-    return KioskController(
+  KioskController _controllerFor(String kioskId) {
+    if (_ownedKioskController != null && _ownedKioskId == kioskId) {
+      return _ownedKioskController!;
+    }
+    _disposeOwnedKioskController();
+    _ownedKioskId = kioskId;
+    return _ownedKioskController = KioskController(
       menuRepository: di.sl<MenuRepository>(),
       orderRepository: di.sl<OrderRepository>(),
       paymentRepository: di.sl<PaymentRepository>(),
       orderRecoveryStore: di.sl<OrderRecoveryStore>(),
+      kioskId: kioskId,
     );
+  }
+
+  void _disposeOwnedKioskController() {
+    _ownedKioskController?.dispose();
+    _ownedKioskController = null;
+    _ownedKioskId = null;
   }
 }
 

@@ -28,11 +28,13 @@ class KioskLayoutSpec {
   bool get useSingleColumn => isTallKiosk || !isWideLandscape;
   int get portraitMenuColumns => width < 700 ? 1 : 2;
 
-  double get screenPadding =>
-      isCompact ? IceBotSpacing.screenPaddingCompact : IceBotSpacing.screenPaddingNormal;
+  double get screenPadding => isCompact
+      ? IceBotSpacing.screenPaddingCompact
+      : IceBotSpacing.screenPaddingNormal;
 
-  double get sectionGap =>
-      isCompact ? IceBotSpacing.sectionGapCompact : IceBotSpacing.sectionGapNormal;
+  double get sectionGap => isCompact
+      ? IceBotSpacing.sectionGapCompact
+      : IceBotSpacing.sectionGapNormal;
 
   double get maxPortraitPanelWidth => isCompact ? double.infinity : 780;
 
@@ -73,9 +75,9 @@ class KioskBackdrop extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            IceBotColors.frostSurface,        // #F4FAFF
-            Color(0xFFF9FCFF),                // mid
-            IceBotColors.snowCard,             // #FFFFFF
+            IceBotColors.frostSurface, // #F4FAFF
+            Color(0xFFF9FCFF), // mid
+            IceBotColors.snowCard, // #FFFFFF
           ],
           stops: [0.0, 0.45, 1.0],
         ),
@@ -169,9 +171,7 @@ class KioskBottomActionBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: _actionsVertical(context),
               )
-            : Row(
-                children: _actionsHorizontal(context),
-              ),
+            : Row(children: _actionsHorizontal(context)),
       ),
     );
   }
@@ -323,10 +323,10 @@ class KioskLoadingPanel extends StatelessWidget {
                   height: iconBoxSize,
                   decoration: BoxDecoration(
                     color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
-                    border: Border.all(
-                      color: IceBotColors.frostBorder,
+                    borderRadius: BorderRadius.circular(
+                      IceBotSpacing.cardRadius,
                     ),
+                    border: Border.all(color: IceBotColors.frostBorder),
                   ),
                   child: Icon(icon, size: iconSize, color: scheme.primary),
                 ),
@@ -397,7 +397,9 @@ class KioskEmptyState extends StatelessWidget {
                   height: iconBoxSize,
                   decoration: BoxDecoration(
                     color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(IceBotSpacing.cardRadius),
+                    borderRadius: BorderRadius.circular(
+                      IceBotSpacing.cardRadius,
+                    ),
                     border: Border.all(color: IceBotColors.frostBorder),
                   ),
                   child: Icon(icon, color: scheme.primary, size: iconSize),

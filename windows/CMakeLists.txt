@@ -43,6 +43,18 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+
+  if(MSVC)
+    file(GLOB MSVC_TOOLSET_DIRS "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/*")
+    if(MSVC_TOOLSET_DIRS)
+      list(REVERSE MSVC_TOOLSET_DIRS)
+      list(GET MSVC_TOOLSET_DIRS 0 LATEST_MSVC_DIR)
+      if(EXISTS "${LATEST_MSVC_DIR}/atlmfc/include")
+        target_include_directories(${TARGET} PRIVATE "${LATEST_MSVC_DIR}/atlmfc/include")
+        target_link_directories(${TARGET} PRIVATE "${LATEST_MSVC_DIR}/atlmfc/lib/x64")
+      endif()
+    endif()
+  endif()
 endfunction()
 
 # Flutter library and tool build rules.

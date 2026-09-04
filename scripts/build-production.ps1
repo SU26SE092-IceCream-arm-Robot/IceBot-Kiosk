@@ -9,11 +9,7 @@
     The entire Release\ folder must be deployed together — the .exe alone is NOT
     sufficient. See the README for deployment details.
 
-    A real Kiosk ID must be obtained from the IceBot Admin Web production environment.
-
-.PARAMETER KioskId
-    Required. The production Kiosk GUID registered in the production backend.
-    Obtain this from the IceBot Admin Web -> Kiosk Management.
+    The built app is linked to a kiosk at runtime through Manager login.
 
 .PARAMETER ApiBaseUrl
     Optional. Production backend origin (no trailing slash, no path).
@@ -24,18 +20,14 @@
     Defaults to: payos
 
 .EXAMPLE
-    .\scripts\build-production.ps1 -KioskId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    .\scripts\build-production.ps1
 
 .EXAMPLE
     .\scripts\build-production.ps1 `
-        -KioskId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
         -ApiBaseUrl "https://api.icebot.io.vn"
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$KioskId,
-
     [Parameter(Mandatory = $false)]
     [string]$ApiBaseUrl = "https://api.icebot.io.vn",
 
@@ -47,17 +39,6 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 # --- Validation ---
-
-if ([string]::IsNullOrWhiteSpace($KioskId)) {
-    Write-Error "KioskId is required. Obtain it from the IceBot Admin Web -> Kiosk Management."
-    exit 1
-}
-
-$uuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
-if ($KioskId.Trim() -notmatch $uuidPattern) {
-    Write-Error "KioskId must be a valid UUID (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
-    exit 1
-}
 
 if ([string]::IsNullOrWhiteSpace($ApiBaseUrl)) {
     Write-Error "ApiBaseUrl cannot be empty."
@@ -95,7 +76,7 @@ $normalizedUrl = $ApiBaseUrl.Trim().TrimEnd("/")
 Write-Host ""
 Write-Host "=== IceBot Kiosk — Production Windows Build ===" -ForegroundColor Cyan
 Write-Host "  API Base URL : $normalizedUrl" -ForegroundColor Green
-Write-Host "  Kiosk ID     : $($KioskId.Trim())" -ForegroundColor Green
+Write-Host "  Kiosk Setup  : Manager login at runtime" -ForegroundColor Green
 Write-Host "  Demo Mode    : false" -ForegroundColor Green
 Write-Host "  Payment Code : $PaymentMethodCode" -ForegroundColor Green
 Write-Host ""
@@ -109,7 +90,6 @@ Push-Location $repositoryRoot
 try {
     & flutter build windows --release `
         "--dart-define=ICEBOT_API_BASE_URL=$normalizedUrl" `
-        "--dart-define=ICEBOT_KIOSK_ID=$($KioskId.Trim())" `
         "--dart-define=ICEBOT_DEMO_MODE=false" `
         "--dart-define=ICEBOT_PAYMENT_METHOD_CODE=$PaymentMethodCode"
 
@@ -144,5 +124,5 @@ Write-Host "  To start the kiosk on the target machine:" -ForegroundColor Yellow
 Write-Host "    .\icebot_kiosk.exe" -ForegroundColor White
 Write-Host ""
 Write-Host "  To build an MSI installer from this release output, run:" -ForegroundColor Yellow
-Write-Host "    .\installer\build-msi.ps1 -ApiBaseUrl '$normalizedUrl' -KioskId '<KIOSK_ID>'" -ForegroundColor White
+Write-Host "    .\installer\build-msi.ps1 -ApiBaseUrl '$normalizedUrl'" -ForegroundColor White
 Write-Host ""

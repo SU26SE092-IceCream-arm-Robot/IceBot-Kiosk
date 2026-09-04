@@ -7,12 +7,7 @@
     Use this to verify a production Kiosk ID before cutting a release build.
 
     A real Kiosk ID must be obtained from the IceBot Admin Web production environment.
-    Do not store a Kiosk ID in this script unless your project treats device
-    configuration as checked-in data (it is not a secret, but it is environment-specific).
-
-.PARAMETER KioskId
-    Required. The production Kiosk GUID registered in the production backend.
-    Obtain this from the IceBot Admin Web -> Kiosk Management.
+    The kiosk identity is selected at runtime after a Manager signs in.
 
 .PARAMETER ApiBaseUrl
     Optional. Production backend origin (no trailing slash, no path).
@@ -23,18 +18,14 @@
     Defaults to: payos
 
 .EXAMPLE
-    .\scripts\run-production.ps1 -KioskId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    .\scripts\run-production.ps1
 
 .EXAMPLE
     .\scripts\run-production.ps1 `
-        -KioskId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" `
         -ApiBaseUrl "https://api.icebot.io.vn"
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$KioskId,
-
     [Parameter(Mandatory = $false)]
     [string]$ApiBaseUrl = "https://api.icebot.io.vn",
 
@@ -46,17 +37,6 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 # --- Validation ---
-
-if ([string]::IsNullOrWhiteSpace($KioskId)) {
-    Write-Error "KioskId is required. Obtain it from the IceBot Admin Web -> Kiosk Management."
-    exit 1
-}
-
-$uuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
-if ($KioskId.Trim() -notmatch $uuidPattern) {
-    Write-Error "KioskId must be a valid UUID (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
-    exit 1
-}
 
 if ([string]::IsNullOrWhiteSpace($ApiBaseUrl)) {
     Write-Error "ApiBaseUrl cannot be empty."
@@ -94,7 +74,7 @@ $normalizedUrl = $ApiBaseUrl.Trim().TrimEnd("/")
 Write-Host ""
 Write-Host "=== IceBot Kiosk — Production Smoke Test ===" -ForegroundColor Cyan
 Write-Host "  API Base URL : $normalizedUrl" -ForegroundColor Green
-Write-Host "  Kiosk ID     : $($KioskId.Trim())" -ForegroundColor Green
+Write-Host "  Kiosk Setup  : Manager login at runtime" -ForegroundColor Green
 Write-Host "  Demo Mode    : false" -ForegroundColor Green
 Write-Host "  Payment Code : $PaymentMethodCode" -ForegroundColor Green
 Write-Host ""
@@ -108,7 +88,6 @@ Push-Location $repositoryRoot
 try {
     & flutter run -d windows `
         "--dart-define=ICEBOT_API_BASE_URL=$normalizedUrl" `
-        "--dart-define=ICEBOT_KIOSK_ID=$($KioskId.Trim())" `
         "--dart-define=ICEBOT_DEMO_MODE=false" `
         "--dart-define=ICEBOT_PAYMENT_METHOD_CODE=$PaymentMethodCode"
 

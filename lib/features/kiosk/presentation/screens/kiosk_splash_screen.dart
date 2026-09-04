@@ -50,10 +50,6 @@ class _KioskSplashScreenState extends State<KioskSplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!AppConfig.hasKioskId) {
-      return const _MissingKioskConfigView();
-    }
-
     final configurationError = AppConfig.runtimeConfigurationError;
     if (configurationError != null) {
       return _InvalidKioskConfigView(message: configurationError);
@@ -126,39 +122,6 @@ class _InvalidKioskConfigView extends StatelessWidget {
           title: 'Cấu hình kiosk không hợp lệ',
           message: message,
           icon: Icons.settings_outlined,
-        ),
-      ),
-    );
-  }
-}
-
-class _MissingKioskConfigView extends StatelessWidget {
-  const _MissingKioskConfigView();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      body: const KioskBackdrop(
-        child: KioskEmptyState(
-          title: 'Chưa cấu hình kiosk',
-          message:
-              'Tablet cần mã kiosk hợp lệ để tải đúng menu và nhận đơn hàng.',
-          icon: Icons.settings_outlined,
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
-          child: Text(
-            'Biến cấu hình cần có: ICEBOT_KIOSK_ID',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
         ),
       ),
     );

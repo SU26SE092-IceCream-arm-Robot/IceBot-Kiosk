@@ -23,8 +23,8 @@ class KioskController extends ChangeNotifier {
            orderRecoveryStore ?? const NoopOrderRecoveryStore(),
        _kioskId = kioskId?.trim().isNotEmpty == true
            ? kioskId!.trim()
-           : AppConfig.effectiveKioskId,
-       _hasKioskId = kioskId?.trim().isNotEmpty == true || AppConfig.hasKioskId;
+           : AppConfig.demoKioskId,
+       _hasKioskId = kioskId?.trim().isNotEmpty == true || AppConfig.demoMode;
 
   final MenuRepository _menuRepository;
   final OrderRepository _orderRepository;
@@ -894,6 +894,40 @@ class KioskController extends ChangeNotifier {
       return false;
     }
 
+    _cartLines.clear();
+    _checkoutIntent = null;
+    _recoverableOrder = null;
+    _paymentAttemptIdempotencyKey = null;
+    _orderAccessToken = null;
+    _activeOrder = null;
+    _activePaymentSession = null;
+    _activePaymentStatus = null;
+    _checkoutError = null;
+    _trackingError = null;
+    _recoveryError = null;
+    notifyListeners();
+    return true;
+  }
+
+  bool get canLogoutManager {
+    final order = _activeOrder;
+    return !_isCheckingOut &&
+        !_isCancellingOrder &&
+        !_isRefreshingPaymentStatus &&
+        !_isRefreshingOrder &&
+        !_isRestoringOrder &&
+        (order == null || _isSafeSessionResetStatus(order.status));
+  }
+
+  Future<bool> prepareForManagerLogout() async {
+    if (!canLogoutManager) {
+      return false;
+    }
+    try {
+      await _orderRecoveryStore.clear();
+    } on Object {
+      return false;
+    }
     _cartLines.clear();
     _checkoutIntent = null;
     _recoverableOrder = null;

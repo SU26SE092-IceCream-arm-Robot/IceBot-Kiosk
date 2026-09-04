@@ -46,11 +46,7 @@ class QuantityStepperLarge extends StatelessWidget {
         const SizedBox(width: IceBotSpacing.sm),
         _CountDisplay(quantity: quantity, scheme: scheme),
         const SizedBox(width: IceBotSpacing.sm),
-        _StepButton(
-          icon: Icons.add_rounded,
-          onTap: onIncrease,
-          scheme: scheme,
-        ),
+        _StepButton(icon: Icons.add_rounded, onTap: onIncrease, scheme: scheme),
       ],
     );
   }

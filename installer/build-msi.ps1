@@ -3,9 +3,6 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$ApiBaseUrl,
 
-    [Parameter(Mandatory = $false)]
-    [string]$KioskId,
-
     [string]$PaymentMethodCode = "payos",
     [string]$Version = "1.0.0",
     [string]$OutputDirectory,
@@ -29,9 +26,6 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 if (-not $DemoMode) {
     if ([string]::IsNullOrWhiteSpace($ApiBaseUrl)) {
         throw "ApiBaseUrl is required unless DemoMode is enabled."
-    }
-    if ([string]::IsNullOrWhiteSpace($KioskId)) {
-        throw "KioskId is required unless DemoMode is enabled."
     }
 }
 
@@ -67,7 +61,6 @@ if (-not $SkipFlutterBuild) {
     else {
         $flutterArguments += "--dart-define=ICEBOT_DEMO_MODE=false"
         $flutterArguments += "--dart-define=ICEBOT_API_BASE_URL=$ApiBaseUrl"
-        $flutterArguments += "--dart-define=ICEBOT_KIOSK_ID=$KioskId"
     }
 
     Push-Location $repositoryRoot

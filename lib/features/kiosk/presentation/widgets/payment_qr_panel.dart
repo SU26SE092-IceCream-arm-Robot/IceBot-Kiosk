@@ -151,11 +151,14 @@ class PaymentQrPanel extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   key: const ValueKey('open-checkout-button'),
-                  onPressed: checkoutUrl != null && payload != null && payload.isNotEmpty
+                  onPressed:
+                      checkoutUrl != null &&
+                          payload != null &&
+                          payload.isNotEmpty
                       ? () => launchUrl(
-                            Uri.parse(checkoutUrl),
-                            mode: LaunchMode.externalApplication,
-                          )
+                          Uri.parse(checkoutUrl),
+                          mode: LaunchMode.externalApplication,
+                        )
                       : null,
                   icon: const Icon(Icons.open_in_browser_outlined),
                   label: const Text('Mở trang thanh toán'),
