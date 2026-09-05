@@ -20,7 +20,7 @@ dotnet tool install wix `
 ```powershell
 .\installer\build-msi.ps1 `
   -ApiBaseUrl "https://backend.example" `
-  -Version "1.0.0"
+  -Version "1.1.0"
 ```
 
 Use the real backend URL and the management-created kiosk ID for the target
@@ -30,7 +30,7 @@ these arguments.
 ## Build an offline UI demo
 
 ```powershell
-.\installer\build-msi.ps1 -DemoMode -Version "1.0.0"
+.\installer\build-msi.ps1 -DemoMode -Version "1.1.0"
 ```
 
 Output is written to `dist/windows/IceBot_Kiosk_<version>.msi`. Install with an

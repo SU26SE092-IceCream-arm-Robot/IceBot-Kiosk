@@ -4,6 +4,12 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   AppConfig._();
 
+  static const _TtsReleaseBuildGuard _ttsReleaseBuildGuard =
+      _TtsReleaseBuildGuard(
+        isReleaseBuild: kReleaseMode,
+        isTtsTestMode: ttsTestMode,
+      );
+
   static const String rawApiBaseUrl = String.fromEnvironment(
     'ICEBOT_API_BASE_URL',
     defaultValue: 'https://api.icebot.io.vn',
@@ -12,6 +18,16 @@ class AppConfig {
   static const bool demoMode = bool.fromEnvironment(
     'ICEBOT_DEMO_MODE',
     defaultValue: false,
+  );
+
+  static const bool ttsTestMode = bool.fromEnvironment(
+    'ICEBOT_TTS_TEST_MODE',
+    defaultValue: false,
+  );
+
+  static const String ttsModelDirectory = String.fromEnvironment(
+    'ICEBOT_TTS_MODEL_DIR',
+    defaultValue: '',
   );
 
   static const String paymentMethodCode = String.fromEnvironment(
@@ -25,25 +41,43 @@ class AppConfig {
 
   static String get apiBaseUrl => normalizeBaseUrl(rawApiBaseUrl);
 
-  static bool get isProductionBuild => kReleaseMode && !demoMode;
+  static bool get isProductionBuild =>
+      kReleaseMode && !demoMode && !ttsTestMode;
 
   /// Null when the current compile-time configuration is safe to start.
   ///
   /// Development builds may use an explicit local HTTP backend. Release builds
   /// require a direct HTTPS origin; kiosk identity is resolved after login.
-  static String? get runtimeConfigurationError => validateRuntimeConfiguration(
-    rawApiUrl: rawApiBaseUrl,
-    paymentCode: paymentMethodCode,
-    isDemoMode: demoMode,
-    isReleaseBuild: kReleaseMode,
-  );
+  static String? get runtimeConfigurationError {
+    _ttsReleaseBuildGuard.verify();
+    return validateRuntimeConfiguration(
+      rawApiUrl: rawApiBaseUrl,
+      paymentCode: paymentMethodCode,
+      isDemoMode: demoMode,
+      isTtsTestMode: ttsTestMode,
+      isReleaseBuild: kReleaseMode,
+    );
+  }
 
   static String? validateRuntimeConfiguration({
     required String rawApiUrl,
     required String paymentCode,
     required bool isDemoMode,
     required bool isReleaseBuild,
+    bool isTtsTestMode = false,
   }) {
+    if (isDemoMode && isTtsTestMode) {
+      return 'ICEBOT_DEMO_MODE và ICEBOT_TTS_TEST_MODE không được bật cùng lúc.';
+    }
+
+    if (isTtsTestMode && isReleaseBuild) {
+      return 'ICEBOT_TTS_TEST_MODE chỉ được phép trong debug/profile build.';
+    }
+
+    if (isTtsTestMode) {
+      return null;
+    }
+
     if (isDemoMode) {
       return null;
     }
@@ -91,4 +125,16 @@ class AppConfig {
         normalized == '::1' ||
         normalized.startsWith('127.');
   }
+}
+
+class _TtsReleaseBuildGuard {
+  const _TtsReleaseBuildGuard({
+    required bool isReleaseBuild,
+    required bool isTtsTestMode,
+  }) : assert(
+         !(isReleaseBuild && isTtsTestMode),
+         'ICEBOT_TTS_TEST_MODE must be false for release builds.',
+       );
+
+  void verify() {}
 }

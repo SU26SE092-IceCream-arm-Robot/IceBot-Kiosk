@@ -4,7 +4,7 @@ param(
     [string]$ApiBaseUrl,
 
     [string]$PaymentMethodCode = "payos",
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.1.0",
     [string]$OutputDirectory,
     [string]$WixPath,
     [switch]$DemoMode,
@@ -57,9 +57,11 @@ if (-not $SkipFlutterBuild) {
 
     if ($DemoMode) {
         $flutterArguments += "--dart-define=ICEBOT_DEMO_MODE=true"
+        $flutterArguments += "--dart-define=ICEBOT_TTS_TEST_MODE=false"
     }
     else {
         $flutterArguments += "--dart-define=ICEBOT_DEMO_MODE=false"
+        $flutterArguments += "--dart-define=ICEBOT_TTS_TEST_MODE=false"
         $flutterArguments += "--dart-define=ICEBOT_API_BASE_URL=$ApiBaseUrl"
     }
 
@@ -74,6 +76,9 @@ if (-not $SkipFlutterBuild) {
         Pop-Location
     }
 }
+
+& (Join-Path $repositoryRoot "scripts\prepare-tts-model.ps1") `
+    -OutputDirectory $releaseDirectory
 
 $executable = Join-Path $releaseDirectory "icebot_kiosk.exe"
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {

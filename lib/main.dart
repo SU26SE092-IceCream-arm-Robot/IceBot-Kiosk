@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/config/routes/app_router.dart';
@@ -10,17 +12,33 @@ import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_controller.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/state/kiosk_scope.dart';
 import 'package:icebot_kiosk/features/kiosk/presentation/widgets/kiosk_panels.dart';
+import 'package:icebot_kiosk/features/speech/application/kiosk_speech_service.dart';
+import 'package:icebot_kiosk/features/speech/application/order_announcement_coordinator.dart';
+import 'package:icebot_kiosk/features/speech/presentation/tts_diagnostics_screen.dart';
 import 'package:icebot_kiosk/features/setup/presentation/screens/manager_login_screen.dart';
 import 'package:icebot_kiosk/features/setup/presentation/state/auth_controller.dart';
 import 'package:icebot_kiosk/features/setup/presentation/state/auth_scope.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final configurationError = AppConfig.runtimeConfigurationError;
+  if (configurationError != null) {
+    runApp(_ConfigurationErrorApp(message: configurationError));
+    return;
+  }
+
+  if (AppConfig.ttsTestMode) {
+    await di.initTtsOnly();
+    runApp(TtsDiagnosticsApp(speechService: di.sl<KioskSpeechService>()));
+    return;
+  }
+
   await di.init();
   final authController = di.sl<AuthController>();
   await authController.restore();
 
   runApp(MyApp(authController: authController));
+  unawaited(di.sl<KioskSpeechService>().initialize());
 }
 
 class MyApp extends StatefulWidget {
@@ -175,6 +193,7 @@ class _MyAppState extends State<MyApp> {
       orderRepository: di.sl<OrderRepository>(),
       paymentRepository: di.sl<PaymentRepository>(),
       orderRecoveryStore: di.sl<OrderRecoveryStore>(),
+      announcementCoordinator: di.sl<OrderAnnouncementCoordinator>(),
       kioskId: kioskId,
     );
   }
@@ -183,6 +202,27 @@ class _MyAppState extends State<MyApp> {
     _ownedKioskController?.dispose();
     _ownedKioskController = null;
     _ownedKioskId = null;
+  }
+}
+
+class _ConfigurationErrorApp extends StatelessWidget {
+  const _ConfigurationErrorApp({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Text(message, textAlign: TextAlign.center),
+          ),
+        ),
+      ),
+    );
   }
 }
 

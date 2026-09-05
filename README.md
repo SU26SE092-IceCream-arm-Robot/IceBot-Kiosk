@@ -58,6 +58,20 @@ flutter analyze
 flutter test
 ```
 
+### Test Vietnamese TTS locally
+
+The diagnostics mode loads the same offline voice used by the Windows MSI and
+does not require Manager login, kiosk selection, or a backend connection:
+
+```powershell
+.\scripts\run-tts-local.ps1
+```
+
+The first run downloads the pinned model into the ignored `build/` cache and
+verifies its SHA-256 checksum. Installed production kiosks never download the
+model; it is included in the MSI. `ICEBOT_TTS_TEST_MODE` is debug-only and must
+never be enabled for a production build.
+
 ---
 
 ## 2. Demo Mode
@@ -152,7 +166,7 @@ flutter build windows --release `
   -ApiBaseUrl "https://api.icebot.io.vn"
 ```
 
-Output MSI: `dist\windows\IceBot_Kiosk_1.0.0.msi`  
+Output MSI: `dist\windows\IceBot_Kiosk_1.1.0.msi`
 See [`installer\README.md`](installer/README.md) for WiX prerequisites.
 
 ---
@@ -163,6 +177,7 @@ See [`installer\README.md`](installer/README.md) for WiX prerequisites.
 |---|---|
 | `ICEBOT_API_BASE_URL` | `https://api.icebot.io.vn` |
 | `ICEBOT_DEMO_MODE` | `false` (must be explicit — never omit) |
+| `ICEBOT_TTS_TEST_MODE` | `false` (release builds reject `true`) |
 | `ICEBOT_PAYMENT_METHOD_CODE` | `payos` (or the code configured in the production backend) |
 
 ### Runtime kiosk setup

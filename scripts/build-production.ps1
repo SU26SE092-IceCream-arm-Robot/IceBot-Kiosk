@@ -6,7 +6,7 @@
     Runs `flutter build windows --release` with the correct production dart-defines.
 
     Output executable: build\windows\x64\runner\Release\icebot_kiosk.exe
-    The entire Release\ folder must be deployed together — the .exe alone is NOT
+    The entire Release\ folder must be deployed together - the .exe alone is NOT
     sufficient. See the README for deployment details.
 
     The built app is linked to a kiosk at runtime through Manager login.
@@ -74,7 +74,7 @@ $normalizedUrl = $ApiBaseUrl.Trim().TrimEnd("/")
 # --- Summary ---
 
 Write-Host ""
-Write-Host "=== IceBot Kiosk — Production Windows Build ===" -ForegroundColor Cyan
+Write-Host "=== IceBot Kiosk - Production Windows Build ===" -ForegroundColor Cyan
 Write-Host "  API Base URL : $normalizedUrl" -ForegroundColor Green
 Write-Host "  Kiosk Setup  : Manager login at runtime" -ForegroundColor Green
 Write-Host "  Demo Mode    : false" -ForegroundColor Green
@@ -91,6 +91,7 @@ try {
     & flutter build windows --release `
         "--dart-define=ICEBOT_API_BASE_URL=$normalizedUrl" `
         "--dart-define=ICEBOT_DEMO_MODE=false" `
+        "--dart-define=ICEBOT_TTS_TEST_MODE=false" `
         "--dart-define=ICEBOT_PAYMENT_METHOD_CODE=$PaymentMethodCode"
 
     if ($LASTEXITCODE -ne 0) {
@@ -100,6 +101,8 @@ try {
 } finally {
     Pop-Location
 }
+
+& (Join-Path $PSScriptRoot "prepare-tts-model.ps1") -OutputDirectory $releaseDir
 
 # --- Report output ---
 
@@ -115,9 +118,9 @@ Write-Host ""
 Write-Host "Output folder  : $releaseDir" -ForegroundColor Cyan
 Write-Host "Executable     : icebot_kiosk.exe" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "IMPORTANT — Deployment:" -ForegroundColor Yellow
+Write-Host "IMPORTANT - Deployment:" -ForegroundColor Yellow
 Write-Host "  Deploy the ENTIRE Release\ folder to the kiosk machine." -ForegroundColor Yellow
-Write-Host "  Do NOT copy only icebot_kiosk.exe — the app will crash without the" -ForegroundColor Yellow
+Write-Host "  Do NOT copy only icebot_kiosk.exe - the app will crash without the" -ForegroundColor Yellow
 Write-Host "  DLLs, flutter_assets\, and data\ subdirectory beside it." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  To start the kiosk on the target machine:" -ForegroundColor Yellow

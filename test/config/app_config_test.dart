@@ -70,4 +70,40 @@ void main() {
 
     expect(error, isNull);
   });
+
+  test('TTS test mode bypasses backend and payment setup in debug', () {
+    final error = AppConfig.validateRuntimeConfiguration(
+      rawApiUrl: '',
+      paymentCode: '',
+      isDemoMode: false,
+      isTtsTestMode: true,
+      isReleaseBuild: false,
+    );
+
+    expect(error, isNull);
+  });
+
+  test('rejects enabling demo mode and TTS test mode together', () {
+    final error = AppConfig.validateRuntimeConfiguration(
+      rawApiUrl: '',
+      paymentCode: '',
+      isDemoMode: true,
+      isTtsTestMode: true,
+      isReleaseBuild: false,
+    );
+
+    expect(error, contains('không được bật cùng lúc'));
+  });
+
+  test('rejects TTS test mode in release builds', () {
+    final error = AppConfig.validateRuntimeConfiguration(
+      rawApiUrl: '',
+      paymentCode: '',
+      isDemoMode: false,
+      isTtsTestMode: true,
+      isReleaseBuild: true,
+    );
+
+    expect(error, contains('debug/profile'));
+  });
 }

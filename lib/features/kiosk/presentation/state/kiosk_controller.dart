@@ -8,6 +8,8 @@ import 'package:icebot_kiosk/features/kiosk/data/models/runtime_menu_models.dart
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository.dart';
+import 'package:icebot_kiosk/features/speech/application/kiosk_speech_service.dart';
+import 'package:icebot_kiosk/features/speech/application/order_announcement_coordinator.dart';
 
 class KioskController extends ChangeNotifier {
   KioskController({
@@ -15,12 +17,16 @@ class KioskController extends ChangeNotifier {
     required OrderRepository orderRepository,
     required PaymentRepository paymentRepository,
     OrderRecoveryStore? orderRecoveryStore,
+    OrderAnnouncementCoordinator? announcementCoordinator,
     String? kioskId,
   }) : _menuRepository = menuRepository,
        _orderRepository = orderRepository,
        _paymentRepository = paymentRepository,
        _orderRecoveryStore =
            orderRecoveryStore ?? const NoopOrderRecoveryStore(),
+       _announcementCoordinator =
+           announcementCoordinator ??
+           OrderAnnouncementCoordinator(const NoopKioskSpeechService()),
        _kioskId = kioskId?.trim().isNotEmpty == true
            ? kioskId!.trim()
            : AppConfig.demoKioskId,
@@ -30,6 +36,7 @@ class KioskController extends ChangeNotifier {
   final OrderRepository _orderRepository;
   final PaymentRepository _paymentRepository;
   final OrderRecoveryStore _orderRecoveryStore;
+  final OrderAnnouncementCoordinator _announcementCoordinator;
   final String _kioskId;
   final bool _hasKioskId;
 
@@ -151,6 +158,7 @@ class KioskController extends ChangeNotifier {
           ? order
           : null;
       _trackingError = null;
+      _announcementCoordinator.registerRestoredOrder(order);
       await _persistOrderRecovery(
         order,
         paymentExpiresAt: recovery.paymentExpiresAt,
@@ -415,6 +423,7 @@ class KioskController extends ChangeNotifier {
 
       _activeOrder = order;
       _recoverableOrder = order;
+      _announcementCoordinator.prepareOrder(order);
       final issuedAccessToken = order.orderAccessToken?.trim();
       if (issuedAccessToken == null || issuedAccessToken.isEmpty) {
         _checkoutError = const ApiException(
@@ -725,6 +734,7 @@ class KioskController extends ChangeNotifier {
       _validatePaymentStatus(status, orderId);
       _activePaymentStatus = status;
       _trackingError = null;
+      _announcementCoordinator.observePayment(_activeOrder, status);
       notifyListeners();
       return status;
     } on ApiException catch (error) {
@@ -825,6 +835,7 @@ class KioskController extends ChangeNotifier {
       _validateTrackedOrder(order, orderId);
       _activeOrder = order;
       _trackingError = null;
+      _announcementCoordinator.observeOrder(order);
       await _persistOrderRecovery(order);
       notifyListeners();
       return order;

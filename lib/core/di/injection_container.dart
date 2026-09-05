@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
@@ -7,6 +9,9 @@ import 'package:icebot_kiosk/features/kiosk/data/repositories/demo_kiosk_reposit
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/order_repository.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/payment_repository.dart';
+import 'package:icebot_kiosk/features/speech/application/kiosk_speech_service.dart';
+import 'package:icebot_kiosk/features/speech/application/order_announcement_coordinator.dart';
+import 'package:icebot_kiosk/features/speech/infrastructure/offline_kiosk_speech_service.dart';
 import 'package:icebot_kiosk/features/setup/data/local/auth_session_store.dart';
 import 'package:icebot_kiosk/features/setup/data/repositories/auth_repository.dart';
 import 'package:icebot_kiosk/features/setup/presentation/state/auth_controller.dart';
@@ -16,6 +21,8 @@ final GetIt sl = GetIt.instance;
 
 /// Initialize all app dependencies using Service Locator pattern (GetIt).
 Future<void> init() async {
+  _registerSpeechServices();
+
   // External
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
@@ -74,4 +81,33 @@ Future<void> init() async {
       () => PaymentRepository(sl<DioClient>()),
     );
   }
+}
+
+Future<void> initTtsOnly() async {
+  _registerSpeechServices();
+}
+
+void _registerSpeechServices() {
+  if (!sl.isRegistered<KioskSpeechService>()) {
+    sl.registerLazySingleton<KioskSpeechService>(
+      () =>
+          OfflineKioskSpeechService(modelDirectory: resolveTtsModelDirectory()),
+      dispose: (service) => service.dispose(),
+    );
+  }
+  if (!sl.isRegistered<OrderAnnouncementCoordinator>()) {
+    sl.registerLazySingleton<OrderAnnouncementCoordinator>(
+      () => OrderAnnouncementCoordinator(sl<KioskSpeechService>()),
+    );
+  }
+}
+
+String resolveTtsModelDirectory() {
+  final override = AppConfig.ttsModelDirectory.trim();
+  if (override.isNotEmpty) {
+    return Directory(override).absolute.path;
+  }
+  final executableDirectory = File(Platform.resolvedExecutable).parent.path;
+  return '$executableDirectory${Platform.pathSeparator}tts'
+      '${Platform.pathSeparator}vits-piper-vi_VN-vais1000-medium';
 }
