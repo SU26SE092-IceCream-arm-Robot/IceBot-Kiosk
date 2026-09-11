@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
@@ -11,23 +11,27 @@ void main() {
   test(
     'real repository calls runtime-menu route and parses backend item',
     () async {
+      final logMessages = <String>[];
+      final originalDebugPrint = debugPrint;
+      debugPrint = (message, {wrapWidth}) {
+        if (message != null) logMessages.add(message);
+      };
+      addTearDown(() => debugPrint = originalDebugPrint);
       final adapter = _RuntimeMenuAdapter(statusCode: 200, body: _successBody);
       final dio = Dio()..httpClientAdapter = adapter;
       final repository = MenuRepository(
         DioClient(baseUrl: 'https://api.icebot.test', dio: dio),
       );
 
-      final menu = await repository.getRuntimeMenu(
-        'aec68c48-207d-433d-b2fd-e7ddf7d5346a',
-      );
+      final menu = await repository.getRuntimeMenu();
 
-      expect(
-        adapter.lastRequest?.uri.path,
-        '/api/v1/kiosks/aec68c48-207d-433d-b2fd-e7ddf7d5346a/runtime-menu',
-      );
+      expect(adapter.lastRequest?.uri.path, '/api/v1/runtime/menu');
       expect(menu.availabilitySource, 'CloudSalesCatalog');
       expect(menu.containsMachineRuntimeState, isFalse);
+      expect(menu.revision, 'menu-revision-1');
+      expect(menu.admission?.canPlaceOrder, isTrue);
       expect(menu.items.single.displayName, 'Kem Vanilla');
+      expect(menu.items.single.imageUrl, 'https://cdn.test/card.png');
       expect(menu.items.single.finalPrice, 35000);
       final optionGroup = menu.items.single.optionGroups.single;
       expect(optionGroup.name, 'Kích cỡ');
@@ -35,6 +39,14 @@ void main() {
       expect(optionGroup.isRequired, isTrue);
       expect(optionGroup.options.single.name, 'Lớn');
       expect(menu.items.single.priceForOptions(['option-large']), 45000);
+      expect(
+        logMessages,
+        contains(
+          contains(
+            '[RuntimeMenu] backendItems=1 parsedItems=1 orderableItems=1',
+          ),
+        ),
+      );
     },
   );
 
@@ -53,7 +65,7 @@ void main() {
     );
 
     await expectLater(
-      repository.getRuntimeMenu('00000000-0000-0000-0000-000000000000'),
+      repository.getRuntimeMenu(),
       throwsA(
         isA<ApiException>().having(
           (error) => error.type,
@@ -97,11 +109,16 @@ final Map<String, Object?> _successBody = {
   'statusCode': 200,
   'data': {
     'snapshotId': '019eff41-0000-7000-8000-000000000001',
+    'revision': 'menu-revision-1',
     'kioskId': 'aec68c48-207d-433d-b2fd-e7ddf7d5346a',
     'generatedAt': '2026-07-01T00:00:00Z',
     'expiresAt': '2026-07-01T00:00:15Z',
-    'availabilitySource': 'CloudSalesCatalog',
-    'containsMachineRuntimeState': false,
+    'admission': {
+      'canPlaceOrder': true,
+      'canOpenPayment': true,
+      'blockers': <Object?>[],
+      'evidenceValidUntil': '2026-07-01T00:00:10Z',
+    },
     'items': [
       {
         'menuId': '019eff41-9f82-7793-9349-bc56cef8baa8',
@@ -119,6 +136,11 @@ final Map<String, Object?> _successBody = {
         'finalPrice': 35000,
         'currency': 'VND',
         'preparationTimeSeconds': 30,
+        'image': {
+          'cardUrl': 'https://cdn.test/card.png',
+          'detailUrl': 'https://cdn.test/detail.png',
+          'altText': 'Kem Vanilla',
+        },
         'optionGroups': [
           {
             'optionGroupId': 12,
@@ -137,6 +159,7 @@ final Map<String, Object?> _successBody = {
                 'priceDelta': 10000,
                 'currency': 'VND',
                 'isDefault': true,
+                'executionImpact': 'None',
               },
             ],
           },

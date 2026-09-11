@@ -4,6 +4,11 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   AppConfig._();
 
+  static const String appVersion = String.fromEnvironment(
+    'ICEBOT_APP_VERSION',
+    defaultValue: '1.2.0',
+  );
+
   static const _TtsReleaseBuildGuard _ttsReleaseBuildGuard =
       _TtsReleaseBuildGuard(
         isReleaseBuild: kReleaseMode,

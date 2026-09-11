@@ -187,7 +187,7 @@ void main() {
 
     expect(result, isNotNull);
     final json = orderRepository.lastRequest!.toJson();
-    expect(json['kioskId'], 'kiosk-id');
+    expect(json, isNot(contains('kioskId')));
     expect(json, isNot(contains('channel')));
     expect(json, isNot(contains('runtimeSnapshotId')));
     expect(json, isNot(contains('runtimeSnapshotGeneratedAt')));
@@ -620,10 +620,10 @@ class _CheckoutMenuRepository extends MenuRepository {
   _CheckoutMenuRepository() : super(DioClient(baseUrl: 'http://localhost'));
 
   @override
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     return RuntimeMenuResult(
       snapshotId: 'snapshot-id',
-      kioskId: kioskId,
+      kioskId: 'kiosk-id',
       generatedAt: DateTime.utc(2026, 6, 30),
       expiresAt: DateTime.utc(2026, 6, 30, 0, 5),
       availabilitySource: 'CloudSalesCatalog',
@@ -641,7 +641,7 @@ class _RuntimeMenuRepository extends MenuRepository {
   int _index = 0;
 
   @override
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     final response = responses[_index++];
     if (response is ApiException) {
       throw response;

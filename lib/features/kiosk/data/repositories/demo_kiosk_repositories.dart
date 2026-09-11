@@ -312,7 +312,7 @@ class DemoMenuRepository extends MenuRepository {
   final DemoKioskStore _store;
 
   @override
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     return _store.getRuntimeMenu();
   }
 }

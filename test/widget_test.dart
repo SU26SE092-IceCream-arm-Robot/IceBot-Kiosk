@@ -1,5 +1,9 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_registration_store.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_session_manager.dart';
 import 'package:icebot_kiosk/features/setup/data/local/auth_session_store.dart';
 import 'package:icebot_kiosk/features/setup/data/repositories/auth_repository.dart';
 import 'package:icebot_kiosk/features/setup/presentation/state/auth_controller.dart';
@@ -9,9 +13,14 @@ void main() {
   testWidgets('app builds and requires Manager setup', (
     WidgetTester tester,
   ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    const secureStorage = FlutterSecureStorage();
+    final registrationStore = ClientDeviceRegistrationStore(secureStorage);
     final authController = AuthController(
       repository: AuthRepository(DioClient(baseUrl: 'https://api.test')),
-      sessionStore: MemoryAuthSessionStore(),
+      legacySessionStore: MemoryAuthSessionStore(),
+      registrationStore: registrationStore,
+      sessionManager: ClientDeviceSessionManager(Dio(), registrationStore),
     );
     await authController.restore();
     await tester.pumpWidget(MyApp(authController: authController));

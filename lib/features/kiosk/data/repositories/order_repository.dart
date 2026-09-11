@@ -18,7 +18,7 @@ class OrderRepository {
       );
     }
     final result = await _client.postResult<OrderResult>(
-      '/api/v1/orders',
+      '/api/v1/runtime/orders',
       data: request.toJson(),
       fromJson: OrderResult.fromJson,
       options: Options(headers: {'Idempotency-Key': idempotencyKey}),
@@ -32,7 +32,7 @@ class OrderRepository {
     required String orderAccessToken,
   }) async {
     final result = await _client.getResult<OrderResult>(
-      '/api/v1/orders/$orderId',
+      '/api/v1/runtime/orders/$orderId',
       fromJson: OrderResult.fromJson,
       options: _orderAccessOptions(orderAccessToken),
     );
@@ -45,7 +45,7 @@ class OrderRepository {
     required String orderAccessToken,
   }) async {
     final result = await _client.getResult<PaymentStatusResult>(
-      '/api/v1/orders/$orderId/payment-status',
+      '/api/v1/runtime/orders/$orderId/payment-status',
       fromJson: PaymentStatusResult.fromJson,
       options: _orderAccessOptions(orderAccessToken),
     );
@@ -67,7 +67,7 @@ class OrderRepository {
     String? reason,
   }) async {
     final result = await _client.postResult<OrderResult>(
-      '/api/v1/orders/$orderId/cancel',
+      '/api/v1/runtime/orders/$orderId/cancel',
       data: {
         if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
       },

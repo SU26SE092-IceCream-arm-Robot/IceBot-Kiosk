@@ -1,26 +1,31 @@
 class RuntimeMenuResult {
   const RuntimeMenuResult({
     required this.snapshotId,
+    this.revision = '',
     required this.kioskId,
     required this.generatedAt,
     required this.expiresAt,
-    required this.availabilitySource,
-    required this.containsMachineRuntimeState,
+    this.availabilitySource = 'CloudSalesCatalog',
+    this.containsMachineRuntimeState = false,
     required this.items,
+    this.admission,
   });
 
   final String snapshotId;
+  final String revision;
   final String kioskId;
   final DateTime generatedAt;
   final DateTime expiresAt;
   final String availabilitySource;
   final bool containsMachineRuntimeState;
   final List<RuntimeMenuItem> items;
+  final RuntimeMenuAdmission? admission;
 
   factory RuntimeMenuResult.fromJson(Object? json) {
     final map = _asMap(json);
     return RuntimeMenuResult(
       snapshotId: map['snapshotId'] as String? ?? '',
+      revision: map['revision'] as String? ?? '',
       kioskId: map['kioskId'] as String? ?? '',
       generatedAt: _readDateTime(map['generatedAt']),
       expiresAt: _readDateTime(map['expiresAt']),
@@ -28,6 +33,9 @@ class RuntimeMenuResult {
           map['availabilitySource'] as String? ?? 'CloudSalesCatalog',
       containsMachineRuntimeState: map['containsMachineRuntimeState'] == true,
       items: _readList(map['items'], RuntimeMenuItem.fromJson),
+      admission: map['admission'] == null
+          ? null
+          : RuntimeMenuAdmission.fromJson(map['admission']),
     );
   }
 }
@@ -51,6 +59,7 @@ class RuntimeMenuItem {
     required this.currency,
     this.preparationTimeSeconds,
     this.imageUrl,
+    this.image,
     this.recipeVersion,
     this.optionGroups = const [],
   });
@@ -72,6 +81,7 @@ class RuntimeMenuItem {
   final String currency;
   final int? preparationTimeSeconds;
   final String? imageUrl;
+  final RuntimeMenuImage? image;
   final int? recipeVersion;
   final List<RuntimeMenuOptionGroup> optionGroups;
 
@@ -103,7 +113,10 @@ class RuntimeMenuItem {
       finalPrice: _readDouble(map['finalPrice']),
       currency: map['currency'] as String? ?? 'VND',
       preparationTimeSeconds: _readInt(map['preparationTimeSeconds']),
-      imageUrl: map['imageUrl'] as String?,
+      imageUrl: _readImageUrl(map),
+      image: map['image'] == null
+          ? null
+          : RuntimeMenuImage.fromJson(map['image']),
       recipeVersion: _readInt(map['recipeVersion']),
       optionGroups: _readList(
         map['optionGroups'],
@@ -119,6 +132,83 @@ class RuntimeMenuItem {
         .where((option) => selected.contains(option.productOptionId))
         .fold<double>(0, (total, option) => total + option.priceDelta);
     return finalPrice + optionTotal;
+  }
+}
+
+class RuntimeMenuImage {
+  const RuntimeMenuImage({
+    required this.cardUrl,
+    required this.detailUrl,
+    this.altText,
+  });
+
+  final String cardUrl;
+  final String detailUrl;
+  final String? altText;
+
+  factory RuntimeMenuImage.fromJson(Object? json) {
+    final map = _asMap(json);
+    return RuntimeMenuImage(
+      cardUrl: map['cardUrl'] as String? ?? '',
+      detailUrl: map['detailUrl'] as String? ?? '',
+      altText: map['altText'] as String?,
+    );
+  }
+}
+
+class RuntimeMenuAdmission {
+  static const kioskConnectivityUnavailableCode =
+      'SALES.KIOSK_CONNECTIVITY_UNAVAILABLE';
+
+  const RuntimeMenuAdmission({
+    required this.canPlaceOrder,
+    required this.canOpenPayment,
+    required this.blockers,
+    this.evidenceValidUntil,
+  });
+
+  final bool canPlaceOrder;
+  final bool canOpenPayment;
+  final List<RuntimeMenuAdmissionBlocker> blockers;
+  final DateTime? evidenceValidUntil;
+
+  bool get isKioskConnectivityUnavailable => blockers.any(
+    (blocker) =>
+        blocker.code.trim().toUpperCase() == kioskConnectivityUnavailableCode,
+  );
+
+  factory RuntimeMenuAdmission.fromJson(Object? json) {
+    final map = _asMap(json);
+    return RuntimeMenuAdmission(
+      canPlaceOrder: map['canPlaceOrder'] == true,
+      canOpenPayment: map['canOpenPayment'] == true,
+      blockers: _readList(
+        map['blockers'],
+        RuntimeMenuAdmissionBlocker.fromJson,
+      ),
+      evidenceValidUntil: _readNullableDateTime(map['evidenceValidUntil']),
+    );
+  }
+}
+
+class RuntimeMenuAdmissionBlocker {
+  const RuntimeMenuAdmissionBlocker({
+    required this.code,
+    required this.message,
+    required this.scope,
+  });
+
+  final String code;
+  final String message;
+  final String scope;
+
+  factory RuntimeMenuAdmissionBlocker.fromJson(Object? json) {
+    final map = _asMap(json);
+    return RuntimeMenuAdmissionBlocker(
+      code: map['code'] as String? ?? '',
+      message: map['message'] as String? ?? '',
+      scope: map['scope'] as String? ?? '',
+    );
   }
 }
 
@@ -177,6 +267,7 @@ class RuntimeMenuProductOption {
     required this.priceDelta,
     required this.currency,
     required this.isDefault,
+    this.executionImpact,
   });
 
   final String productOptionId;
@@ -186,6 +277,7 @@ class RuntimeMenuProductOption {
   final double priceDelta;
   final String currency;
   final bool isDefault;
+  final String? executionImpact;
 
   factory RuntimeMenuProductOption.fromJson(Object? json) {
     final map = _asMap(json);
@@ -197,6 +289,7 @@ class RuntimeMenuProductOption {
       priceDelta: _readDouble(map['priceDelta']),
       currency: map['currency'] as String? ?? 'VND',
       isDefault: map['isDefault'] == true,
+      executionImpact: map['executionImpact'] as String?,
     );
   }
 }
@@ -225,6 +318,22 @@ DateTime _readDateTime(Object? value) {
   }
 
   return DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+DateTime? _readNullableDateTime(Object? value) {
+  if (value is! String) return null;
+  return DateTime.tryParse(value);
+}
+
+String? _readImageUrl(Map<String, dynamic> map) {
+  final legacy = map['imageUrl'];
+  if (legacy is String && legacy.trim().isNotEmpty) return legacy;
+  final image = map['image'];
+  if (image is! Map) return null;
+  final cardUrl = image['cardUrl'];
+  if (cardUrl is String && cardUrl.trim().isNotEmpty) return cardUrl;
+  final detailUrl = image['detailUrl'];
+  return detailUrl is String && detailUrl.trim().isNotEmpty ? detailUrl : null;
 }
 
 double _readDouble(Object? value) {

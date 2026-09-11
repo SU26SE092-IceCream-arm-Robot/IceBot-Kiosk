@@ -213,7 +213,7 @@ class KioskController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final menu = await _menuRepository.getRuntimeMenu(_kioskId);
+      final menu = await _menuRepository.getRuntimeMenu();
       _menu = menu;
       _reconcileCartWith(menu);
       _menuError = null;
@@ -682,7 +682,6 @@ class KioskController extends ChangeNotifier {
     return _CheckoutIntent(
       cartFingerprint: cartFingerprint,
       orderRequest: CreateOrderRequest(
-        kioskId: _kioskId,
         idempotencyKey: 'tablet-order-$nonce',
         clientOrderId: 'tablet-$nonce',
         runtimeSnapshotId: _menu!.snapshotId,

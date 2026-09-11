@@ -34,7 +34,7 @@ class _ManagerLoginScreenState extends State<ManagerLoginScreen> {
       emailOrUsername: _accountController.text,
       password: _passwordController.text,
     );
-    if (success) {
+    if (success && mounted) {
       _passwordController.clear();
     }
   }
@@ -136,7 +136,7 @@ class _SetupIntroduction extends StatelessWidget {
         const SizedBox(height: 12),
         const _SetupBenefit(
           icon: Icons.lock_outline_rounded,
-          text: 'Phiên đăng nhập được lưu bằng bộ nhớ bảo mật',
+          text: 'Định danh tablet được lưu bằng bộ nhớ bảo mật',
         ),
       ],
     );

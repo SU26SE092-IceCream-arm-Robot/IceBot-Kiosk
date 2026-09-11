@@ -25,7 +25,7 @@ void main() {
 
     expect(
       adapter.lastRequest?.uri.path,
-      '/api/v1/orders/019eff41-0000-7000-8000-000000000001/payment-sessions',
+      '/api/v1/runtime/orders/019eff41-0000-7000-8000-000000000001/payment-sessions',
     );
     expect(adapter.lastRequest?.method, 'POST');
     expect(adapter.lastRequest?.data, {

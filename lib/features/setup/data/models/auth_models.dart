@@ -89,6 +89,41 @@ class ManagedKiosk {
   }
 }
 
+class ManagedClientDevice {
+  const ManagedClientDevice({
+    required this.id,
+    required this.kioskId,
+    required this.type,
+    required this.status,
+    required this.revision,
+  });
+
+  final String id;
+  final String kioskId;
+  final String type;
+  final String status;
+  final int revision;
+
+  bool get isActiveSelfOrderTablet =>
+      type.toLowerCase() == 'selfordertablet' &&
+      status.toLowerCase() != 'retired';
+
+  factory ManagedClientDevice.fromJson(Object? json) {
+    final map = _asMap(json);
+    return ManagedClientDevice(
+      id: map['id'] as String? ?? '',
+      kioskId: map['kioskId'] as String? ?? '',
+      type: map['type'] as String? ?? '',
+      status: map['status'] as String? ?? '',
+      revision: switch (map['revision']) {
+        int value => value,
+        num value => value.toInt(),
+        _ => 0,
+      },
+    );
+  }
+}
+
 class KioskAuthSession {
   const KioskAuthSession({
     required this.accessToken,

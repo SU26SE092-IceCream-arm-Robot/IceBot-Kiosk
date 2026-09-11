@@ -13,6 +13,8 @@ Flutter/Windows customer-facing self-service kiosk application for the IceBot pl
 5. [Required Production Configuration](#5-required-production-configuration)
 6. [Production Verification Checklist](#6-production-verification-checklist)
 
+Hướng dẫn dành cho nhân viên triển khai: [Cài đặt và thiết lập tablet Windows](TABLET-SETUP-GUIDE.md).
+
 ---
 
 ## 1. Local Development
@@ -166,7 +168,7 @@ flutter build windows --release `
   -ApiBaseUrl "https://api.icebot.io.vn"
 ```
 
-Output MSI: `dist\windows\IceBot_Kiosk_1.1.0.msi`
+Output MSI: `dist\windows\IceBot_Kiosk_1.2.0.msi`
 See [`installer\README.md`](installer/README.md) for WiX prerequisites.
 
 ---

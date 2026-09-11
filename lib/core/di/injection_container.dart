@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:icebot_kiosk/config/app_config.dart';
 import 'package:icebot_kiosk/core/network/dio_client.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_registration_store.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_session_manager.dart';
 import 'package:icebot_kiosk/features/kiosk/data/local/order_recovery_store.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/demo_kiosk_repositories.dart';
 import 'package:icebot_kiosk/features/kiosk/data/repositories/menu_repository.dart';
@@ -32,6 +35,9 @@ Future<void> init() async {
   sl.registerLazySingleton<AuthSessionStore>(
     () => SecureAuthSessionStore(sl<FlutterSecureStorage>()),
   );
+  sl.registerLazySingleton<ClientDeviceRegistrationStore>(
+    () => ClientDeviceRegistrationStore(sl<FlutterSecureStorage>()),
+  );
   sl.registerLazySingleton<OrderAccessTokenStore>(
     () => SecureOrderAccessTokenStore(sl<FlutterSecureStorage>()),
   );
@@ -45,16 +51,48 @@ Future<void> init() async {
   );
 
   // Network
-  sl.registerLazySingleton<DioClient>(
-    () => DioClient(baseUrl: AppConfig.apiBaseUrl),
+  sl.registerLazySingleton<Dio>(
+    () => Dio(
+      BaseOptions(
+        baseUrl: AppConfig.apiBaseUrl,
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+        headers: const {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    ),
   );
+  sl.registerLazySingleton<ClientDeviceSessionManager>(
+    () => ClientDeviceSessionManager(
+      sl<Dio>(),
+      sl<ClientDeviceRegistrationStore>(),
+    ),
+  );
+  sl.registerLazySingleton<DioClient>(() {
+    final runtimeDio = Dio();
+    return DioClient(
+      baseUrl: AppConfig.apiBaseUrl,
+      dio: runtimeDio,
+      interceptors: [
+        ClientDeviceAuthInterceptor(
+          runtimeDio,
+          sl<ClientDeviceSessionManager>(),
+        ),
+      ],
+    );
+  });
   sl.registerLazySingleton<AuthRepository>(
     () => AuthRepository(DioClient(baseUrl: AppConfig.apiBaseUrl)),
   );
   sl.registerLazySingleton<AuthController>(
     () => AuthController(
       repository: sl<AuthRepository>(),
-      sessionStore: sl<AuthSessionStore>(),
+      legacySessionStore: sl<AuthSessionStore>(),
+      registrationStore: sl<ClientDeviceRegistrationStore>(),
+      sessionManager: sl<ClientDeviceSessionManager>(),
     ),
   );
 

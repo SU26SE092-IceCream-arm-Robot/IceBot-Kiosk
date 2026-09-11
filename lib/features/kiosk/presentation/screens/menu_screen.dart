@@ -64,6 +64,8 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     final items = controller.menuItems;
+    final isKioskConnectivityUnavailable =
+        controller.menu?.admission?.isKioskConnectivityUnavailable ?? false;
 
     return Scaffold(
       body: SafeArea(
@@ -74,13 +76,18 @@ class _MenuScreenState extends State<MenuScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
-                    child: const _StorefrontHeader(),
+                    child: _StorefrontHeader(
+                      isKioskConnectivityUnavailable:
+                          isKioskConnectivityUnavailable,
+                    ),
                   ),
                   const Divider(height: 1),
                   // Content section
                   Expanded(
                     child: items.isEmpty
                         ? _EmptyMenuView(
+                            isKioskConnectivityUnavailable:
+                                isKioskConnectivityUnavailable,
                             onRetry: () => controller.loadMenu(force: true),
                           )
                         : LayoutBuilder(
@@ -151,7 +158,9 @@ class _MenuScreenState extends State<MenuScreen> {
 }
 
 class _StorefrontHeader extends StatelessWidget {
-  const _StorefrontHeader();
+  const _StorefrontHeader({required this.isKioskConnectivityUnavailable});
+
+  final bool isKioskConnectivityUnavailable;
 
   Future<void> _requestLogout(BuildContext context) async {
     final auth = AuthScope.maybeOf(context);
@@ -171,14 +180,13 @@ class _StorefrontHeader extends StatelessWidget {
       return;
     }
 
-    final session = auth.session;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.logout_rounded),
         title: const Text('Gỡ thiết lập kiosk?'),
         content: Text(
-          'Máy sẽ đăng xuất Manager ${session?.managerName ?? ''} và quay về màn hình thiết lập. Thông tin phiên và kiosk đã lưu trên máy sẽ bị xóa.',
+          'Máy sẽ xóa cấu hình kiosk và thông tin xác thực tablet đã lưu cục bộ, sau đó quay về màn hình thiết lập.',
         ),
         actions: [
           TextButton(
@@ -187,7 +195,7 @@ class _StorefrontHeader extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Đăng xuất'),
+            child: const Text('Gỡ liên kết'),
           ),
         ],
       ),
@@ -221,14 +229,18 @@ class _StorefrontHeader extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Kem robot sẵn sàng phục vụ',
+              isKioskConnectivityUnavailable
+                  ? 'Thiết bị tạm thời mất kết nối'
+                  : 'Kem robot sẵn sàng phục vụ',
               style: compact
                   ? Theme.of(context).textTheme.headlineMedium
                   : Theme.of(context).textTheme.displayMedium,
             ),
             SizedBox(height: compact ? 4 : 8),
             Text(
-              'Chọn món, quét QR và nhận kem trong vài bước.',
+              isKioskConnectivityUnavailable
+                  ? 'Kiosk sẽ tiếp tục phục vụ khi kết nối được khôi phục.'
+                  : 'Chọn món, quét QR và nhận kem trong vài bước.',
               maxLines: compact ? 2 : null,
               overflow: compact ? TextOverflow.ellipsis : null,
               style: compact
@@ -379,18 +391,30 @@ class _MenuLoadingView extends StatelessWidget {
 }
 
 class _EmptyMenuView extends StatelessWidget {
-  const _EmptyMenuView({required this.onRetry});
+  const _EmptyMenuView({
+    required this.isKioskConnectivityUnavailable,
+    required this.onRetry,
+  });
 
+  final bool isKioskConnectivityUnavailable;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: KioskEmptyState(
-        title: 'Menu hiện chưa có món',
-        message: 'Vui lòng tải lại sau ít phút hoặc liên hệ nhân viên hỗ trợ.',
-        icon: Icons.icecream_outlined,
-        actionLabel: 'Tải lại menu',
+        title: isKioskConnectivityUnavailable
+            ? 'Thiết bị đang offline'
+            : 'Menu hiện chưa có món',
+        message: isKioskConnectivityUnavailable
+            ? 'Máy làm kem hiện không kết nối nên kiosk chưa thể nhận đơn. Vui lòng kiểm tra lại kết nối hoặc liên hệ nhân viên hỗ trợ.'
+            : 'Vui lòng tải lại sau ít phút hoặc liên hệ nhân viên hỗ trợ.',
+        icon: isKioskConnectivityUnavailable
+            ? Icons.wifi_off_rounded
+            : Icons.icecream_outlined,
+        actionLabel: isKioskConnectivityUnavailable
+            ? 'Kiểm tra lại'
+            : 'Tải lại menu',
         onAction: onRetry,
       ),
     );

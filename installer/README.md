@@ -13,6 +13,9 @@ Install the pinned WiX command-line tool outside the repository:
 dotnet tool install wix `
   --tool-path "$env:LOCALAPPDATA\IceBot\Tools\wix" `
   --version 6.0.2
+
+& "$env:LOCALAPPDATA\IceBot\Tools\wix\wix.exe" extension add `
+  -g WixToolset.UI.wixext/6.0.2
 ```
 
 ## Build for an edge kiosk
@@ -20,19 +23,25 @@ dotnet tool install wix `
 ```powershell
 .\installer\build-msi.ps1 `
   -ApiBaseUrl "https://backend.example" `
-  -Version "1.1.0"
+  -Version "1.2.0"
 ```
 
-Use the real backend URL and the management-created kiosk ID for the target
-machine. Do not put provider secrets, MQTT credentials, or access tokens in
-these arguments.
+Use the real backend URL. Do not put provider secrets, MQTT credentials, or
+access tokens in these arguments. The installed app asks a Manager to select a
+kiosk and then provisions a ClientDevice identity; the Manager session is not
+kept as runtime authority.
 
 ## Build an offline UI demo
 
 ```powershell
-.\installer\build-msi.ps1 -DemoMode -Version "1.1.0"
+.\installer\build-msi.ps1 -DemoMode -Version "1.2.0"
 ```
 
 Output is written to `dist/windows/IceBot_Kiosk_<version>.msi`. Install with an
 administrator account because the package uses a per-machine installation
-under Program Files. The MSI creates Start Menu and desktop shortcuts.
+under Program Files. The setup wizard displays `License.rtf`, requires explicit
+acceptance, and lets the operator choose the installation directory. The MSI
+creates Start Menu and desktop shortcuts.
+
+`License.rtf` is the text shown to end users. Product ownership should review
+that text before public distribution whenever legal or company details change.

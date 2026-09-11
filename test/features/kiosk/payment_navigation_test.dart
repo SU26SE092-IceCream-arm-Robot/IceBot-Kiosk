@@ -68,10 +68,10 @@ class _NavigationMenuRepository extends MenuRepository {
   _NavigationMenuRepository() : super(DioClient(baseUrl: 'http://localhost'));
 
   @override
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     return RuntimeMenuResult(
       snapshotId: 'snapshot-id',
-      kioskId: kioskId,
+      kioskId: 'kiosk-id',
       generatedAt: DateTime.utc(2026, 7, 1),
       expiresAt: DateTime.utc(2026, 7, 1, 0, 5),
       availabilitySource: 'CloudSalesCatalog',

@@ -22,6 +22,34 @@ void main() {
     expect(find.text('Tải lại menu'), findsOneWidget);
   });
 
+  testWidgets(
+    'shows device offline when runtime admission blocks connectivity',
+    (tester) async {
+      await _pumpMenu(
+        tester,
+        response: _emptyMenu(
+          admission: const RuntimeMenuAdmission(
+            canPlaceOrder: false,
+            canOpenPayment: false,
+            blockers: [
+              RuntimeMenuAdmissionBlocker(
+                code: 'SALES.KIOSK_CONNECTIVITY_UNAVAILABLE',
+                message: 'Kiosk is not currently reachable for online sales.',
+                scope: 'Kiosk',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(find.text('Thiết bị đang offline'), findsOneWidget);
+      expect(find.text('Thiết bị tạm thời mất kết nối'), findsOneWidget);
+      expect(find.text('Kiểm tra lại'), findsOneWidget);
+      expect(find.text('Menu hiện chưa có món'), findsNothing);
+      expect(find.text('Kem robot sẵn sàng phục vụ'), findsNothing);
+    },
+  );
+
   testWidgets('shows retry state when backend is offline', (tester) async {
     await _pumpMenu(
       tester,
@@ -150,7 +178,7 @@ RuntimeMenuResult _menuWithItem() {
   );
 }
 
-RuntimeMenuResult _emptyMenu() {
+RuntimeMenuResult _emptyMenu({RuntimeMenuAdmission? admission}) {
   return RuntimeMenuResult(
     snapshotId: 'snapshot-id',
     kioskId: 'aec68c48-207d-433d-b2fd-e7ddf7d5346a',
@@ -159,6 +187,7 @@ RuntimeMenuResult _emptyMenu() {
     availabilitySource: 'CloudSalesCatalog',
     containsMachineRuntimeState: false,
     items: const [],
+    admission: admission,
   );
 }
 
@@ -169,7 +198,7 @@ class _StubMenuRepository extends MenuRepository {
   final Object response;
 
   @override
-  Future<RuntimeMenuResult> getRuntimeMenu(String kioskId) async {
+  Future<RuntimeMenuResult> getRuntimeMenu() async {
     if (response is ApiException) {
       throw response;
     }

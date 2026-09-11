@@ -4,7 +4,7 @@ param(
     [string]$ApiBaseUrl,
 
     [string]$PaymentMethodCode = "payos",
-    [string]$Version = "1.1.0",
+    [string]$Version = "1.2.0",
     [string]$OutputDirectory,
     [string]$WixPath,
     [switch]$DemoMode,
@@ -18,6 +18,7 @@ $installerDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repositoryRoot = Split-Path -Parent $installerDirectory
 $releaseDirectory = Join-Path $repositoryRoot "build\windows\x64\runner\Release"
 $wixSource = Join-Path $installerDirectory "IceBotKiosk.wxs"
+$licenseRtf = Join-Path $installerDirectory "License.rtf"
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repositoryRoot "dist\windows"
@@ -46,12 +47,17 @@ dotnet tool install wix --tool-path `"$env:LOCALAPPDATA\IceBot\Tools\wix`" --ver
 "@
 }
 
+if (-not (Test-Path -LiteralPath $licenseRtf -PathType Leaf)) {
+    throw "Installer license was not found at $licenseRtf."
+}
+
 if (-not $SkipFlutterBuild) {
     $flutterArguments = @(
         "build",
         "windows",
         "--release",
         "--build-name=$Version",
+        "--dart-define=ICEBOT_APP_VERSION=$Version",
         "--dart-define=ICEBOT_PAYMENT_METHOD_CODE=$PaymentMethodCode"
     )
 
@@ -94,7 +100,9 @@ $intermediateDirectory = Join-Path $resolvedOutputDirectory "wix-intermediate"
     $wixSource `
     -arch x64 `
     -d "AppVersion=$Version" `
+    -d "LicenseRtf=$licenseRtf" `
     -d "PublishDir=$releaseDirectory" `
+    -ext "WixToolset.UI.wixext/6.0.2" `
     -intermediateFolder $intermediateDirectory `
     -pdbtype none `
     -out $msiPath

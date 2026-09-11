@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:icebot_kiosk/core/error/api_exception.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_registration_store.dart';
+import 'package:icebot_kiosk/features/client_device/data/client_device_session_manager.dart';
 import 'package:icebot_kiosk/features/setup/data/local/auth_session_store.dart';
 import 'package:icebot_kiosk/features/setup/data/models/auth_models.dart';
 import 'package:icebot_kiosk/features/setup/data/repositories/auth_repository.dart';
@@ -9,28 +11,33 @@ import 'package:icebot_kiosk/features/setup/data/repositories/auth_repository.da
 class AuthController extends ChangeNotifier {
   AuthController({
     required AuthRepository repository,
-    required AuthSessionStore sessionStore,
+    required AuthSessionStore legacySessionStore,
+    required ClientDeviceRegistrationStore registrationStore,
+    required ClientDeviceSessionManager sessionManager,
   }) : _repository = repository,
-       _sessionStore = sessionStore;
+       _legacySessionStore = legacySessionStore,
+       _registrationStore = registrationStore,
+       _sessionManager = sessionManager {
+    _sessionManager.addListener(_handleRuntimeSessionChanged);
+  }
 
   final AuthRepository _repository;
-  final AuthSessionStore _sessionStore;
+  final AuthSessionStore _legacySessionStore;
+  final ClientDeviceRegistrationStore _registrationStore;
+  final ClientDeviceSessionManager _sessionManager;
 
-  KioskAuthSession? _session;
   AuthenticatedAccountResult? _pendingAccount;
   AccountRoleScope? _pendingManagerRole;
   List<ManagedKiosk> _availableKiosks = const [];
   ApiException? _error;
   bool _isRestoring = true;
   bool _isSubmitting = false;
-  Future<String?>? _refreshInFlight;
 
-  KioskAuthSession? get session => _session;
+  ClientDeviceRuntimeIdentity? get session => _sessionManager.identity;
   ApiException? get error => _error;
   bool get isRestoring => _isRestoring;
   bool get isSubmitting => _isSubmitting;
-  bool get isAuthenticated => _session?.isValid == true;
-  String? get accessToken => _session?.accessToken;
+  bool get isAuthenticated => session != null;
   bool get requiresKioskSelection =>
       _pendingAccount != null && _pendingManagerRole != null;
   List<ManagedKiosk> get availableKiosks => _availableKiosks;
@@ -41,39 +48,17 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final stored = await _sessionStore.read();
-      if (stored == null) {
-        _session = null;
-        return;
-      }
-
-      _session = stored;
-      try {
-        final refreshed = await _repository.refresh(stored.refreshToken);
-        final next = await _createSession(refreshed, previous: stored);
-        if (next == null) {
-          await _clearLocalSession();
-          _error = const ApiException(
-            type: ApiErrorType.validation,
-            message: 'Vui lòng đăng nhập lại để chọn kiosk cho máy này.',
-          );
-        } else {
-          _session = next;
-          await _sessionStore.write(next);
-        }
-      } on ApiException catch (error) {
-        if (error.type == ApiErrorType.unauthorized) {
-          await _clearLocalSession();
-        } else {
-          // Keep the last valid binding when the backend is temporarily offline.
-          _error = error;
-        }
-      }
+      // v1.1 and earlier persisted a Manager session. It must never be reused
+      // as runtime authority after the ClientDevice migration.
+      await _legacySessionStore.clear();
+      await _sessionManager.ensureSession();
+    } on ApiException catch (error) {
+      _error = error;
     } on Object {
-      await _clearLocalSession();
+      _sessionManager.clearIdentity();
       _error = const ApiException(
         type: ApiErrorType.unknown,
-        message: 'Không thể khôi phục cấu hình kiosk đã lưu.',
+        message: 'Không thể khôi phục cấu hình thiết bị kiosk đã lưu.',
       );
     } finally {
       _isRestoring = false;
@@ -85,9 +70,7 @@ class AuthController extends ChangeNotifier {
     required String emailOrUsername,
     required String password,
   }) async {
-    if (_isSubmitting) {
-      return false;
-    }
+    if (_isSubmitting) return false;
     if (emailOrUsername.trim().isEmpty || password.isEmpty) {
       _error = const ApiException(
         type: ApiErrorType.validation,
@@ -101,21 +84,29 @@ class AuthController extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    AuthenticatedAccountResult? account;
+    var provisioningStarted = false;
     try {
-      final account = await _repository.login(
+      account = await _repository.login(
         emailOrUsername: emailOrUsername,
         password: password,
       );
-      final next = await _createSession(account);
-      if (next != null) {
-        await _sessionStore.write(next);
-        _session = next;
+      final kiosk = await _resolveKiosk(account);
+      if (kiosk != null) {
+        provisioningStarted = true;
+        await _provisionAndActivate(account, kiosk);
       }
       return true;
     } on ApiException catch (error) {
+      if (account != null && _pendingAccount == null && !provisioningStarted) {
+        await _revokeManagerSession(account.refreshToken);
+      }
       _error = _presentLoginError(error);
       return false;
     } on Object {
+      if (account != null && _pendingAccount == null && !provisioningStarted) {
+        await _revokeManagerSession(account.refreshToken);
+      }
       _error = const ApiException(
         type: ApiErrorType.unknown,
         message: 'Không thể hoàn tất thiết lập kiosk.',
@@ -127,66 +118,9 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<String?> refreshAccessToken() {
-    return _refreshInFlight ??= _refreshAccessToken().whenComplete(() {
-      _refreshInFlight = null;
-    });
-  }
-
-  Future<String?> _refreshAccessToken() async {
-    final current = _session;
-    if (current == null) {
-      return null;
-    }
-
-    try {
-      final account = await _repository.refresh(current.refreshToken);
-      final next = await _createSession(account, previous: current);
-      if (next == null) {
-        return null;
-      }
-      _session = next;
-      await _sessionStore.write(next);
-      notifyListeners();
-      return next.accessToken;
-    } on ApiException catch (error) {
-      if (error.type == ApiErrorType.unauthorized) {
-        await _clearLocalSession();
-        notifyListeners();
-      }
-      return null;
-    }
-  }
-
-  Future<void> logout() async {
-    if (_isSubmitting) {
-      return;
-    }
-    _isSubmitting = true;
-    _error = null;
-    notifyListeners();
-
-    final refreshToken = _session?.refreshToken;
-    await _clearLocalSession();
-    notifyListeners();
-    try {
-      if (refreshToken != null && refreshToken.trim().isNotEmpty) {
-        await _repository.revoke(refreshToken);
-      }
-    } on Object {
-      // Local reset must still succeed if the revoke call cannot reach backend.
-    } finally {
-      _isSubmitting = false;
-      notifyListeners();
-    }
-  }
-
   Future<bool> selectKiosk(String kioskId) async {
-    if (_isSubmitting) {
-      return false;
-    }
+    if (_isSubmitting) return false;
     final account = _pendingAccount;
-    final role = _pendingManagerRole;
     ManagedKiosk? kiosk;
     for (final candidate in _availableKiosks) {
       if (candidate.id == kioskId) {
@@ -194,7 +128,7 @@ class AuthController extends ChangeNotifier {
         break;
       }
     }
-    if (account == null || role == null || kiosk == null) {
+    if (account == null || _pendingManagerRole == null || kiosk == null) {
       _error = const ApiException(
         type: ApiErrorType.validation,
         message: 'Lựa chọn kiosk không còn hợp lệ. Vui lòng đăng nhập lại.',
@@ -207,15 +141,17 @@ class AuthController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final next = _sessionFor(account, role, kiosk);
-      await _sessionStore.write(next);
-      _session = next;
-      _clearPendingKioskSelection();
+      await _provisionAndActivate(account, kiosk);
       return true;
+    } on ApiException catch (error) {
+      _clearPendingKioskSelection();
+      _error = error;
+      return false;
     } on Object {
+      _clearPendingKioskSelection();
       _error = const ApiException(
         type: ApiErrorType.unknown,
-        message: 'Không thể lưu lựa chọn kiosk. Vui lòng thử lại.',
+        message: 'Không thể liên kết tablet với kiosk. Vui lòng thử lại.',
       );
       return false;
     } finally {
@@ -225,15 +161,34 @@ class AuthController extends ChangeNotifier {
   }
 
   void cancelKioskSelection() {
+    final refreshToken = _pendingAccount?.refreshToken;
     _clearPendingKioskSelection();
     _error = null;
     notifyListeners();
+    if (refreshToken != null) {
+      unawaited(_revokeManagerSession(refreshToken));
+    }
   }
 
-  Future<KioskAuthSession?> _createSession(
-    AuthenticatedAccountResult account, {
-    KioskAuthSession? previous,
-  }) async {
+  Future<void> logout() async {
+    if (_isSubmitting) return;
+    _isSubmitting = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await _registrationStore.clearRegistration();
+      await _legacySessionStore.clear();
+      _sessionManager.clearIdentity();
+      _clearPendingKioskSelection();
+    } finally {
+      _isSubmitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<ManagedKiosk?> _resolveKiosk(
+    AuthenticatedAccountResult account,
+  ) async {
     final managerRoles = account.roles
         .where((role) => role.roleCode.toLowerCase() == 'manager')
         .toList(growable: false);
@@ -255,75 +210,79 @@ class AuthController extends ChangeNotifier {
     final role = managerRoles.single;
     final roleKioskId = role.kioskId?.trim();
     final storeId = role.storeId?.trim();
-    ManagedKiosk? kiosk;
-
     if (roleKioskId != null && roleKioskId.isNotEmpty) {
-      kiosk = ManagedKiosk(id: roleKioskId, storeId: storeId ?? '');
-    } else if (previous != null &&
-        previous.storeId == storeId &&
-        previous.kioskId.trim().isNotEmpty) {
-      kiosk = ManagedKiosk(
-        id: previous.kioskId,
-        storeId: previous.storeId ?? '',
-        code: previous.kioskCode,
-        name: previous.kioskName,
+      return ManagedKiosk(id: roleKioskId, storeId: storeId ?? '');
+    }
+    if (storeId == null || storeId.isEmpty) {
+      throw const ApiException(
+        type: ApiErrorType.validation,
+        message:
+            'Tài khoản Manager chưa được gán điểm bán hoặc kiosk. Vui lòng kiểm tra cấu hình tài khoản.',
       );
-    } else {
-      if (storeId == null || storeId.isEmpty) {
-        throw const ApiException(
-          type: ApiErrorType.validation,
-          message:
-              'Tài khoản Manager chưa được gán điểm bán hoặc kiosk. Vui lòng kiểm tra cấu hình tài khoản.',
-        );
-      }
-      final kiosks = await _repository.listKiosksForStore(
-        accessToken: account.accessToken,
-        storeId: storeId,
-      );
-      final matching = kiosks
-          .where(
-            (candidate) =>
-                candidate.storeId.isEmpty || candidate.storeId == storeId,
-          )
-          .toList(growable: false);
-      if (matching.isEmpty) {
-        throw const ApiException(
-          type: ApiErrorType.notFound,
-          statusCode: 404,
-          message: 'Điểm bán của Manager chưa có kiosk được cấu hình.',
-        );
-      }
-      if (matching.length > 1) {
-        _pendingAccount = account;
-        _pendingManagerRole = role;
-        _availableKiosks = matching;
-        return null;
-      }
-      kiosk = matching.single;
     }
 
-    return _sessionFor(account, role, kiosk);
+    final kiosks = await _repository.listKiosksForStore(
+      accessToken: account.accessToken,
+      storeId: storeId,
+    );
+    final matching = kiosks
+        .where(
+          (candidate) =>
+              candidate.storeId.isEmpty || candidate.storeId == storeId,
+        )
+        .toList(growable: false);
+    if (matching.isEmpty) {
+      throw const ApiException(
+        type: ApiErrorType.notFound,
+        statusCode: 404,
+        message: 'Điểm bán của Manager chưa có kiosk được cấu hình.',
+      );
+    }
+    if (matching.length > 1) {
+      _pendingAccount = account;
+      _pendingManagerRole = role;
+      _availableKiosks = matching;
+      return null;
+    }
+    return matching.single;
   }
 
-  KioskAuthSession _sessionFor(
+  Future<void> _provisionAndActivate(
     AuthenticatedAccountResult account,
-    AccountRoleScope role,
     ManagedKiosk kiosk,
-  ) {
-    return KioskAuthSession(
-      accessToken: account.accessToken.trim(),
-      refreshToken: account.refreshToken.trim(),
-      accountId: account.id.trim(),
-      userName: account.userName.trim(),
-      managerName: account.fullName.trim().isNotEmpty
-          ? account.fullName.trim()
-          : account.userName.trim(),
-      organizationId: role.organizationId,
-      storeId: role.storeId?.trim(),
-      kioskId: kiosk.id.trim(),
-      kioskCode: kiosk.code,
-      kioskName: kiosk.name,
-    );
+  ) async {
+    try {
+      final pending = await _registrationStore.readOrCreatePendingProvision();
+      final device = await _repository.configureClientDevice(
+        accessToken: account.accessToken,
+        kiosk: kiosk,
+        pending: pending,
+      );
+      await _registrationStore.completeProvision(device.id, pending);
+      final identity = await _sessionManager.ensureSession(force: true);
+      if (identity == null || identity.kioskId != kiosk.id) {
+        await _registrationStore.clearRegistration();
+        _sessionManager.clearIdentity();
+        throw const ApiException(
+          type: ApiErrorType.conflict,
+          statusCode: 409,
+          message: 'Định danh tablet không khớp với kiosk đã chọn.',
+        );
+      }
+      _clearPendingKioskSelection();
+    } finally {
+      await _revokeManagerSession(account.refreshToken);
+    }
+  }
+
+  Future<void> _revokeManagerSession(String refreshToken) async {
+    if (refreshToken.trim().isEmpty) return;
+    try {
+      await _repository.revoke(refreshToken);
+    } on Object {
+      // Manager credentials are never persisted; a transient revoke failure
+      // must not undo a successfully provisioned device.
+    }
   }
 
   ApiException _presentLoginError(ApiException error) {
@@ -337,15 +296,17 @@ class AuthController extends ChangeNotifier {
     return error;
   }
 
-  Future<void> _clearLocalSession() async {
-    _session = null;
-    _clearPendingKioskSelection();
-    await _sessionStore.clear();
-  }
-
   void _clearPendingKioskSelection() {
     _pendingAccount = null;
     _pendingManagerRole = null;
     _availableKiosks = const [];
+  }
+
+  void _handleRuntimeSessionChanged() => notifyListeners();
+
+  @override
+  void dispose() {
+    _sessionManager.removeListener(_handleRuntimeSessionChanged);
+    super.dispose();
   }
 }

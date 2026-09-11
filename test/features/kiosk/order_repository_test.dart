@@ -20,11 +20,9 @@ void main() {
 
       final order = await repository.createOrder(
         const CreateOrderRequest(
-          kioskId: 'kiosk-id',
           idempotencyKey: 'order-intent-001',
           clientOrderId: 'tablet-order-001',
           runtimeSnapshotId: 'legacy-snapshot-not-sent',
-          channel: 'Tablet',
           clientTotalAmount: 45000,
           items: [
             CreateOrderItemRequest(
@@ -40,13 +38,12 @@ void main() {
       );
 
       expect(adapter.lastRequest?.method, 'POST');
-      expect(adapter.lastRequest?.uri.path, '/api/v1/orders');
+      expect(adapter.lastRequest?.uri.path, '/api/v1/runtime/orders');
       expect(
         adapter.lastRequest?.headers['Idempotency-Key'],
         'order-intent-001',
       );
       expect(adapter.lastRequest?.data, {
-        'kioskId': 'kiosk-id',
         'clientOrderId': 'tablet-order-001',
         'clientTotalAmount': 45000.0,
         'items': [
@@ -80,7 +77,7 @@ void main() {
     );
 
     expect(adapter.lastRequest?.method, 'GET');
-    expect(adapter.lastRequest?.uri.path, '/api/v1/orders/order-id');
+    expect(adapter.lastRequest?.uri.path, '/api/v1/runtime/orders/order-id');
     expect(
       adapter.lastRequest?.headers['Order-Access-Token'],
       'order-access-token-001',
