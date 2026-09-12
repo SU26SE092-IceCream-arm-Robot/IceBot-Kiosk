@@ -150,7 +150,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // Use the available display area on launch while retaining Windows caption
+  // controls for kiosk maintenance and recovery.
+  return ShowWindow(window_handle_, SW_MAXIMIZE);
 }
 
 // static

@@ -52,12 +52,25 @@ class _MenuScreenState extends State<MenuScreen> {
       final availability = RuntimeMenuAvailabilityPresenter.fromError(error);
       return Scaffold(
         body: KioskBackdrop(
-          child: KioskErrorPanel(
-            title: availability.title,
-            error: error,
-            primaryMessage: availability.message,
-            actionLabel: 'Thử lại',
-            onAction: () => controller.loadMenu(force: true),
+          child: Stack(
+            children: [
+              KioskErrorPanel(
+                title: availability.title,
+                error: error,
+                primaryMessage: availability.message,
+                actionLabel: 'Thử lại',
+                onAction: () => controller.loadMenu(force: true),
+              ),
+              if (AuthScope.maybeOf(context) != null)
+                Positioned(
+                  top: 20,
+                  right: 28,
+                  child: _AdminSettingsButton(
+                    filled: true,
+                    onLongPress: () => _requestKioskLogout(context),
+                  ),
+                ),
+            ],
           ),
         ),
       );
@@ -157,64 +170,58 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 }
 
+Future<void> _requestKioskLogout(BuildContext context) async {
+  final auth = AuthScope.maybeOf(context);
+  final kiosk = KioskScope.maybeOf(context);
+  if (auth == null || kiosk == null) return;
+
+  if (!kiosk.canLogoutManager) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Không thể đăng xuất khi đơn hàng vẫn đang được xử lý.'),
+      ),
+    );
+    return;
+  }
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      icon: const Icon(Icons.logout_rounded),
+      title: const Text('Gỡ thiết lập kiosk?'),
+      content: const Text(
+        'Máy sẽ xóa cấu hình kiosk và thông tin xác thực tablet đã lưu cục bộ, sau đó quay về màn hình thiết lập.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Hủy'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Gỡ liên kết'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  final prepared = await kiosk.prepareForManagerLogout();
+  if (!prepared || !context.mounted) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể xóa phiên kiosk an toàn.')),
+      );
+    }
+    return;
+  }
+  await auth.logout();
+}
+
 class _StorefrontHeader extends StatelessWidget {
   const _StorefrontHeader({required this.isKioskConnectivityUnavailable});
 
   final bool isKioskConnectivityUnavailable;
-
-  Future<void> _requestLogout(BuildContext context) async {
-    final auth = AuthScope.maybeOf(context);
-    final kiosk = KioskScope.maybeOf(context);
-    if (auth == null || kiosk == null) {
-      return;
-    }
-
-    if (!kiosk.canLogoutManager) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Không thể đăng xuất khi đơn hàng vẫn đang được xử lý.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.logout_rounded),
-        title: const Text('Gỡ thiết lập kiosk?'),
-        content: Text(
-          'Máy sẽ xóa cấu hình kiosk và thông tin xác thực tablet đã lưu cục bộ, sau đó quay về màn hình thiết lập.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Gỡ liên kết'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) {
-      return;
-    }
-
-    final prepared = await kiosk.prepareForManagerLogout();
-    if (!prepared || !context.mounted) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không thể xóa phiên kiosk an toàn.')),
-        );
-      }
-      return;
-    }
-    await auth.logout();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -273,7 +280,7 @@ class _StorefrontHeader extends StatelessWidget {
                     if (auth != null) ...[
                       const SizedBox(width: 6),
                       _AdminSettingsButton(
-                        onLongPress: () => _requestLogout(context),
+                        onLongPress: () => _requestKioskLogout(context),
                       ),
                     ],
                   ],
@@ -291,7 +298,7 @@ class _StorefrontHeader extends StatelessWidget {
                       const SizedBox(width: 8),
                       _AdminSettingsButton(
                         filled: true,
-                        onLongPress: () => _requestLogout(context),
+                        onLongPress: () => _requestKioskLogout(context),
                       ),
                     ],
                   ],
@@ -320,7 +327,7 @@ class _AdminSettingsButton extends StatelessWidget {
     }
 
     final button = filled
-        ? IconButton.filledTonal(
+        ? IconButton.filled(
             tooltip: 'Quản lý kiosk',
             onPressed: explainGesture,
             icon: const Icon(Icons.settings_outlined),
@@ -408,7 +415,7 @@ class _EmptyMenuView extends StatelessWidget {
             : 'Menu hiện chưa có món',
         message: isKioskConnectivityUnavailable
             ? 'Máy làm kem hiện không kết nối nên kiosk chưa thể nhận đơn. Vui lòng kiểm tra lại kết nối hoặc liên hệ nhân viên hỗ trợ.'
-            : 'Vui lòng tải lại sau ít phút hoặc liên hệ nhân viên hỗ trợ.',
+            : 'Hiện chưa có sản phẩm sẵn sàng để nhận đơn. Vui lòng tải lại sau ít phút hoặc liên hệ nhân viên hỗ trợ.',
         icon: isKioskConnectivityUnavailable
             ? Icons.wifi_off_rounded
             : Icons.icecream_outlined,

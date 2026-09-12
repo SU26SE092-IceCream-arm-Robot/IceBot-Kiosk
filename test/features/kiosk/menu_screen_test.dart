@@ -19,6 +19,12 @@ void main() {
     await _pumpMenu(tester, response: _emptyMenu());
 
     expect(find.text('Menu hiện chưa có món'), findsOneWidget);
+    expect(
+      find.text(
+        'Hiện chưa có sản phẩm sẵn sàng để nhận đơn. Vui lòng tải lại sau ít phút hoặc liên hệ nhân viên hỗ trợ.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Tải lại menu'), findsOneWidget);
   });
 

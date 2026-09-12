@@ -4,7 +4,7 @@ param(
     [string]$ApiBaseUrl,
 
     [string]$PaymentMethodCode = "payos",
-    [string]$Version = "1.2.0",
+    [string]$Version = "1.2.1",
     [string]$OutputDirectory,
     [string]$WixPath,
     [switch]$DemoMode,

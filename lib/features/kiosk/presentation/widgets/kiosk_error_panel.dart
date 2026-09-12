@@ -133,8 +133,9 @@ class KioskErrorPanel extends StatelessWidget {
         'Kết nối đang chậm. Vui lòng thử lại sau vài giây.',
       ApiErrorType.network => 'Kiểm tra mạng của kiosk hoặc kết nối backend.',
       ApiErrorType.notFound => 'Kiosk hoặc dữ liệu menu chưa được cấu hình.',
-      ApiErrorType.conflict =>
-        'Kiosk hoặc sản phẩm đang tạm thời không sẵn sàng.',
+      // Conflict messages are mapped by RuntimeMenuAvailabilityPresenter.
+      // A generic helper here would incorrectly mix kiosk and product causes.
+      ApiErrorType.conflict => null,
       ApiErrorType.upstream =>
         error?.message == null ? null : 'Chi tiết kỹ thuật: ${error!.message}',
       _ => null,

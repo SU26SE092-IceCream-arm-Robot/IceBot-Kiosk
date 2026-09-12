@@ -37,6 +37,7 @@ void main() {
 
     expect(unreachable.title, 'Kiosk đang mất kết nối');
     expect(inactive.title, 'Kiosk chưa sẵn sàng phục vụ');
+    expect(inactive.message, 'Kiosk chưa được kích hoạt để nhận đơn hàng.');
   });
 
   test('maps operational pauses without exposing backend enum text', () {
